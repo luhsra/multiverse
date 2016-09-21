@@ -11,7 +11,10 @@ CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -O2
 plugin.so: $(PLUGIN_SOURCE_FILES)
 	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
 
-test:
-	$(TARGET_GCC) -c -fplugin=$(PWD)/plugin.so test.c
+test: plugin.so
+	$(TARGET_GCC) -fplugin=$(PWD)/plugin.so -o test test.c
 
-.PHONY= test
+clean:
+	rm -f *.o *.so test
+
+.PHONY= test clean
