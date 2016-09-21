@@ -8,7 +8,7 @@
  *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
  *
  *  * Kernel Newbies wiki
- *    https://kernelnewbies.org/KernelProjects/compiler-multiverse 
+ *    https://kernelnewbies.org/KernelProjects/compiler-multiverse
  */
 
 
@@ -20,7 +20,7 @@ extern void print_generic_stmt(FILE *, tree, int);
 
 #define DEBUG
 
-/* 
+/*
  * All plugins must export this symbol so that they can be loaded with GCC.
  */
 int plugin_is_GPL_compatible;
