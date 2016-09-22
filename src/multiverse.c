@@ -1,5 +1,5 @@
 /*
- * Licensed under the GPL v2, or (at your option) v3
+ * Licensed under the GPL v2
  *
  *
  * Further reading for function/compiler multiverse:
@@ -12,9 +12,14 @@
  */
 
 
-#include <gcc-plugin.h>
-#include <tree.h>
-#include <tree-pass.h>
+#include "gcc-common.h"
+
+/*
+ * Produce declarations for all appropriate clones of FN.  If
+ * UPDATE_METHOD_VEC_P is nonzero, the clones are added to the
+ * CLASTYPE_METHOD_VEC as well.
+ */
+extern void clone_function_decl(tree, int);
 
 extern void print_generic_stmt(FILE *, tree, int);
 
@@ -26,27 +31,10 @@ extern void print_generic_stmt(FILE *, tree, int);
 int plugin_is_GPL_compatible;
 
 
-/*
- * The following data is required for 'gcc --version / --help' and is thus
- * useful to expose the interface of the plugin and further information to the
- * user.
- */
 struct plugin_info mv_plugin_info =
 {
-    .version = "0.1",
-    .help = "Here should be something written about how to use this plugin.",
-};
-
-
-/*
- * Specify which version(s) of the GCC are compatible to this plugin.  There are
- * more members, such as time stamp or revision, to further narrow
- * compatibility.  Look into 'plugin-version.h' to check the fields of your
- * infrastructure if compatibility problems occur.
- */
-static struct plugin_gcc_version mv_plugin_version =
-{
-    .basever = "6",
+    .version = "092016",
+    .help = NULL,
 };
 
 
@@ -54,15 +42,11 @@ static struct plugin_gcc_version mv_plugin_version =
  * Handler of the multiverse attribute.  Currently it's doing nothing but to
  * return NULL_TREE, but maybe we need to do something at a later point.
  */
-
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
 {
 #ifdef DEBUG
-    fprintf(stderr, "Found attribute\n");
-    fprintf(stderr, "\tvariable name = ");
+    fprintf(stderr, "---- Found MULTIVERSE variable : ");
     print_generic_stmt(stderr, *node, 0);
-    fprintf(stderr, "\tattribute = ");
-    print_generic_stmt(stderr, name, 0);
 #endif
     return NULL_TREE;
 }
@@ -96,24 +80,92 @@ static void register_mv_attribute(void *event_data, void *data)
 
 
 /*
+ * Return true if var is multiverse attributed.
+ */
+static bool is_multiverse_var(tree &var)
+{
+	tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(var));
+	if(attr == NULL_TREE)
+		return false;
+	return true;
+}
+
+
+static unsigned int find_mv_vars_execute()
+{
+	basic_block bb;
+
+	FOR_EACH_BB_FN(bb, cfun) {
+        gimple_stmt_iterator gsi;
+        for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+            gimple stmt;
+
+            stmt = gsi_stmt(gsi);
+
+#ifdef DEBUG
+            print_gimple_stmt(stderr, stmt, 0, TDF_DETAILS);
+#endif
+        }
+	}
+
+    varpool_node_ptr node;
+
+	printf("\n\nSearching multiverse variables\n");
+
+	FOR_EACH_VARIABLE(node) {
+		tree var = NODE_DECL(node);
+		print_generic_stmt(stderr, var, 0);
+
+		if(is_multiverse_var(var)) {
+			printf("\tTHAT'S MULTIVERSE BABY!\n");
+            clone_function_decl(NODE_DECL(cfun), 0);
+		} else {
+			printf("\tIt's NULL_TREE :(\n");
+		}
+	}
+
+//    clone_function_decl(
+
+	return 0;
+}
+
+
+#define PASS_NAME find_mv_vars
+#define NO_GATE
+#include "gcc-generate-gimple-pass.h"
+
+
+/*
  * Initialization function of this plugin: the very heart & soul.
  */
-int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *ver)
+int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *version)
 {
 #ifdef DEBUG
-    printf("Initializing the multiverse GCC plugin.\n");
+    fprintf(stderr, "Initializing the multiverse GCC plugin.\n");
 #endif
 
-    char *plugin_name = info->base_name;
+    const char * plugin_name = info->base_name;
+    struct register_pass_info find_mv_vars_info;
+
+    find_mv_vars_info.pass = make_find_mv_vars_pass();
+    find_mv_vars_info.reference_pass_name = "ssa";
+    find_mv_vars_info.ref_pass_instance_number = 1;
+    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER;
+
+
+    if (!plugin_default_version_check(version, &gcc_version)) {
+        error(G_("incompatible gcc/plugin versions"));
+        return 1;
+    }
 
     // register plugin information
     register_callback(plugin_name, PLUGIN_INFO, NULL, &mv_plugin_info);
 
-    // register the 'multiverse' attribute
+    // register the multiverse attribute
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
 
-#ifdef DEBUG
-    printf("Initializing finished.\n");
-#endif
+    // register the multiverse GIMPLE pass
+    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
+
     return 0;
 }

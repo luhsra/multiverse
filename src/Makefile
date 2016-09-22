@@ -12,7 +12,7 @@ plugin.so: $(PLUGIN_SOURCE_FILES)
 	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
 
 test: plugin.so
-	$(TARGET_GCC) -fplugin=$(PWD)/plugin.so -o test test.c
+	$(TARGET_GCC) -fplugin=$(PWD)/plugin.so -o test test.c -O0
 
 clean:
 	rm -f *.o *.so test
