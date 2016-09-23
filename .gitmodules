@@ -1,0 +1,3 @@
+[submodule "goat-plugins"]
+	path = goat-plugins
+	url = git@github.com:enferex/GOAT-Plugs.git
