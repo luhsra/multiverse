@@ -118,7 +118,7 @@ static unsigned int find_mv_vars_execute()
 
 		if(is_multiverse_var(var)) {
 			printf("\tTHAT'S MULTIVERSE BABY!\n");
-            clone_function_decl(NODE_DECL(cfun), 0);
+//            clone_function_decl(NODE_DECL(cfun), 0);
 		} else {
 			printf("\tIt's NULL_TREE :(\n");
 		}
