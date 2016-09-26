@@ -1,4 +1,6 @@
 # Required packages
+# 	- g++-$VERSION
+# 	- gcc-$VERSION
 # 	- gcc-$VERSION-source
 # 	- gcc-$VERSION-plugin-dev
 
@@ -25,7 +27,6 @@ test: test_1
 test_1: debug
 	rm -f test_1 test_1.c.*
 	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized
-
-
+	less test_1.c.211t.optimized
 
 .PHONY= all clean debug test

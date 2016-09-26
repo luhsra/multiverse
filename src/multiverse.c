@@ -18,6 +18,7 @@
  */
 
 #include "gcc-common.h"
+#include <string>
 
 // For debugging purposes
 extern void print_generic_stmt(FILE *, tree, int);
@@ -102,63 +103,119 @@ static bool is_multiverse_var(tree &var)
 	return true;
 }
 
+/* Build a clone of FNDECL with a modified name.  */
 
-/*
- * Clone fn_cnode and insert the clone into the call graph.
- *
- * Notes:
- *      - The function must be uninlineable
- */
-static void generate_fn_clones(tree &orig)
+static tree clone_fndecl (tree fndecl)
 {
+  tree new_decl = copy_node (fndecl);
+  tree new_name;
+  std::string s;
+
+  s = IDENTIFIER_POINTER (DECL_NAME (fndecl));
+  s += ".multiverse";
+  DECL_NAME (new_decl) = get_identifier (s.c_str ());
+
+
+  s = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (fndecl));
+  s += ".multiverse";
+  new_name = get_identifier (s.c_str ());
+//  IDENTIFIER_TRANSPARENT_ALIAS (new_name) = 1;
+//  TREE_CHAIN (new_name) = DECL_ASSEMBLER_NAME (fndecl);
+
+  SET_DECL_ASSEMBLER_NAME (new_decl, new_name);
+
+  /* We are going to modify attributes list and therefore should
+     make own copy.  */
+  DECL_ATTRIBUTES (new_decl) = copy_list (DECL_ATTRIBUTES (fndecl));
+
+  /* Change builtin function code.  */
+  if (DECL_BUILT_IN (new_decl))
+    {
+      gcc_assert (DECL_BUILT_IN_CLASS (new_decl) == BUILT_IN_NORMAL);
+      gcc_assert (DECL_FUNCTION_CODE (new_decl) < BEGIN_CHKP_BUILTINS);
+      DECL_FUNCTION_CODE (new_decl)
+	= (enum built_in_function)(DECL_FUNCTION_CODE (new_decl)
+				   + BEGIN_CHKP_BUILTINS + 1);
+    }
+
+  DECL_FUNCTION_CODE (new_decl);
+  return new_decl;
+}
+
+
+#include <tree-chkp.h>
+extern cgraph_node *chkp_maybe_create_clone (tree fndecl);
+
+static void generate_fn_clones(tree &fndecl)
+{
+    tree new_decl;
+    cgraph_node * node;
+    cgraph_node * clone;
+
+//    node = cgraph_node::get_create (fndecl);
+    node = get_fn_cnode(fndecl);
+    new_decl = clone_fndecl(fndecl);
+
+    clone = node->create_version_clone (new_decl, vNULL, NULL);
+    clone->externally_visible = node->externally_visible;
+    clone->local = node->local;
+    clone->address_taken = node->address_taken;
+    clone->thunk = node->thunk;
+    clone->alias = node->alias;
+    clone->weakref = node->weakref;
+    clone->cpp_implicit_alias = node->cpp_implicit_alias;
+    clone->instrumented_version = node;
+    clone->orig_decl = fndecl;
+    clone->instrumentation_clone = true;
+    node->instrumented_version = clone;
+
+    if (gimple_has_body_p (fndecl))
+    {
+        tree_function_versioning (fndecl, new_decl, NULL, false,
+                NULL, false, NULL, NULL);
+        clone->lowered = true;
+    }
+
+
+    return;
 //	struct cgraph_node  * fn_cnode = get_fn_cnode(decl);
 //	struct cgraph_node  * clone = cgraph_create_node(decl);
 //  tree decl = clone_function_name(orig, "my_fn_clone");
-
-#ifdef DEBUG
-    fprintf(stderr, "---- Generating function clones for ");
-    print_generic_stmt(stderr, orig, 0);
-#endif
-
-    char fnname[32] = {0};
-    tree decl, resdecl, initial, proto;
-
-    snprintf(fnname, 31, "__FUNCTION_CLONE__");
-    proto = build_varargs_function_type_list(integer_type_node, NULL_TREE);
-    decl = build_fn_decl(fnname, proto);
-    SET_DECL_ASSEMBLER_NAME(decl, get_identifier(fnname));
-
-    /* Result */
-    resdecl=build_decl(BUILTINS_LOCATION,RESULT_DECL,NULL_TREE,integer_type_node);
-    DECL_ARTIFICIAL(resdecl) = 1;
-    DECL_CONTEXT(resdecl) = decl;
-    DECL_RESULT(decl) = resdecl;
-
-    /* Initial */
-    initial = make_node(BLOCK);
-    TREE_USED(initial) = 1;
-    DECL_INITIAL(decl) = initial;
-    DECL_UNINLINABLE(decl) = 1;
-    DECL_EXTERNAL(decl) = 0;
-    DECL_PRESERVE_P(decl) = 1;
-
-    /* Func decl */
-    TREE_USED(decl) = 1;
-    TREE_PUBLIC(decl) = 1;
-    TREE_STATIC(decl) = 1;
-    DECL_ARTIFICIAL(decl) = 1;
-
-    /* Make the function */
-    push_struct_function(decl);
-    cfun->function_end_locus = BUILTINS_LOCATION;
-    gimplify_function_tree(decl);
-
-    /* Update */
-    cgraph_node::add_new_function(decl, false);
-    pop_cfun();
-
+//
+//    std::string orig_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(orig));
+//    std::string clone_name = orig_name + "_mv_clone";
+//    const char * fnname = clone_name.c_str();
+//
+//#ifdef DEBUG
+//    fprintf(stderr, "---- Generating function clones for '%s'\n", orig_name.c_str());
+//    fprintf(stderr, "---- Generating function clones for '%s'\n", clone_name.c_str());
+//#endif
+//
+//
+//	struct cgraph_node  * fn_cnode = get_fn_cnode(orig);
+//	vec<cgraph_edge *> callers = fn_cnode->collect_callers();
+////	fn_cnode->create_clone(orig, 1, 5, true, callers, true, NULL, NULL);
+//
+//    vec<ipa_replace_map *, va_gc> * trees = NULL;
+////    cgraph_node * clone = fn_cnode->create_virtual_clone(callers, trees, NULL, "__multiverse_clone");
+//
+//    cgraph_node * clone = fn_cnode->instrumented_version;
+//
+//#ifdef DEBUG
+////    fprintf(stderr, "---- Cloned call graph node '%s'\n", clone->name());
+//#endif
+//
+////    cgraph_node::add_new_function(clone->decl, false);
+//
+////    cgraph_node * clone = chkp_maybe_create_clone (orig);
+////    SET_DECL_ASSEMBLER_NAME(clone->decl, get_identifier(fnname));
+//
+//
+//
     return;
 }
+
+
 
 
 bool is_function_clone(tree decl)
@@ -176,12 +233,13 @@ static unsigned int find_mv_vars_execute()
     varpool_node_ptr node;
 
 #ifdef DEBUG
-	fprintf(stderr, "\n**** Searching multiverse variables in ");
+	fprintf(stderr, "\n******** Searching multiverse variables in ");
     print_generic_stmt(stderr, cfun->decl, 0);
 #endif
 
 	FOR_EACH_VARIABLE(node) {
 		tree var = NODE_DECL(node);
+
 #ifdef DEBUG
         fprintf(stderr, "---- Found multiverse var ");
 		print_generic_stmt(stderr, var, 0);
@@ -190,8 +248,6 @@ static unsigned int find_mv_vars_execute()
 		if(!is_multiverse_var(var))
             continue;
 
-//        printf("\tTHAT'S MULTIVERSE BABY!\n");
-        // Get the node of cfun in the call graph to generate clones.
         if (cloned++ == 0) {
             generate_fn_clones(cfun->decl);
         }
