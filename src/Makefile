@@ -4,18 +4,28 @@
 
 HOST_GCC=g++
 TARGET_GCC=gcc
-PLUGIN_SOURCE_FILES= multiverse.c
+PLUGIN= multiverse
 GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
-CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -O2
+CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -O0
 
-plugin.so: $(PLUGIN_SOURCE_FILES)
-	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
-
-test: plugin.so
-	rm -f test_1
-	$(TARGET_GCC) -fplugin=$(PWD)/plugin.so -o test_1 test_1.c -O0
+all: $(PLUGIN).c
+	$(HOST_GCC) -shared $(CXXFLAGS) $(PLUGIN).c -o $(PLUGIN).so
 
 clean:
 	rm -f *.o *.so test
+	rm -f test_1 test_1.c.*
 
-.PHONY= test clean
+# DEBUGGING & TESTING
+
+debug: CXXFLAGS+= -DDEBUG
+debug: all
+
+test: test_1
+
+test_1: debug
+	rm -f test_1 test_1.c.*
+	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized
+
+
+
+.PHONY= all clean debug test

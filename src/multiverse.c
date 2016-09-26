@@ -1,34 +1,31 @@
 /*
+ * Copyright 2016 by Valentin Rothberg <valentinrothberg@gmail.com>
  * Licensed under the GPL v2
+ *
+ *
+ * This GCC plugin adds support for multiversing functions, as described by
+ * [1,2].  Currently, the multiverse support is limited to boolean variables
+ * that must be attributed with 'multiverse'.
  *
  *
  * Further reading for function/compiler multiverse:
  *
- *  * "Function Multiverses for Dynamic Variability"
- *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
+ * [1] Kernel Newbies wiki
+ *     https://kernelnewbies.org/KernelProjects/compiler-multiverse
  *
- *  * Kernel Newbies wiki
- *    https://kernelnewbies.org/KernelProjects/compiler-multiverse
+ * [2] "Function Multiverses for Dynamic Variability"
+ *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
  */
-
 
 #include "gcc-common.h"
 
-/*
- * Produce declarations for all appropriate clones of FN.  If
- * UPDATE_METHOD_VEC_P is nonzero, the clones are added to the
- * CLASTYPE_METHOD_VEC as well.
- */
-extern void clone_function_decl(tree, int);
-
+// For debugging purposes
 extern void print_generic_stmt(FILE *, tree, int);
 
-#define DEBUG
-
 /*
- * All plugins must export this symbol so that they can be loaded with GCC.
+ * All plugins must export this symbol so that they can be loaded by GCC.
  */
-int plugin_is_GPL_compatible;
+int plugin_is_GPL_compatible = 0xF5F3;
 
 
 struct plugin_info mv_plugin_info =
@@ -45,7 +42,7 @@ struct plugin_info mv_plugin_info =
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
 {
 #ifdef DEBUG
-    fprintf(stderr, "---- Found MULTIVERSE variable : ");
+    fprintf(stderr, "---- attributing MULTIVERSE variable ");
     print_generic_stmt(stderr, *node, 0);
 #endif
     return NULL_TREE;
@@ -80,6 +77,21 @@ static void register_mv_attribute(void *event_data, void *data)
 
 
 /*
+ * Return the call graph node of fndecl.  We need the corresponding cgrap node
+ * for multiversing / cloning functions, which can only be done in the cgraph.
+ */
+struct cgraph_node *get_fn_cnode(const_tree fndecl)
+{
+    gcc_assert(TREE_CODE(fndecl) == FUNCTION_DECL);
+#if BUILDING_GCC_VERSION <= 4005
+    return cgraph_get_node(CONST_CAST_TREE(fndecl));
+#else
+    return cgraph_get_node(fndecl);
+#endif
+}
+
+
+/*
  * Return true if var is multiverse attributed.
  */
 static bool is_multiverse_var(tree &var)
@@ -91,40 +103,99 @@ static bool is_multiverse_var(tree &var)
 }
 
 
-static unsigned int find_mv_vars_execute()
+/*
+ * Clone fn_cnode and insert the clone into the call graph.
+ *
+ * Notes:
+ *      - The function must be uninlineable
+ */
+static void generate_fn_clones(tree &orig)
 {
-	basic_block bb;
-
-	FOR_EACH_BB_FN(bb, cfun) {
-        gimple_stmt_iterator gsi;
-        for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
-            gimple stmt;
-
-            stmt = gsi_stmt(gsi);
+//	struct cgraph_node  * fn_cnode = get_fn_cnode(decl);
+//	struct cgraph_node  * clone = cgraph_create_node(decl);
+//  tree decl = clone_function_name(orig, "my_fn_clone");
 
 #ifdef DEBUG
-            print_gimple_stmt(stderr, stmt, 0, TDF_DETAILS);
+    fprintf(stderr, "---- Generating function clones for ");
+    print_generic_stmt(stderr, orig, 0);
 #endif
-        }
-	}
 
+    char fnname[32] = {0};
+    tree decl, resdecl, initial, proto;
+
+    snprintf(fnname, 31, "__FUNCTION_CLONE__");
+    proto = build_varargs_function_type_list(integer_type_node, NULL_TREE);
+    decl = build_fn_decl(fnname, proto);
+    SET_DECL_ASSEMBLER_NAME(decl, get_identifier(fnname));
+
+    /* Result */
+    resdecl=build_decl(BUILTINS_LOCATION,RESULT_DECL,NULL_TREE,integer_type_node);
+    DECL_ARTIFICIAL(resdecl) = 1;
+    DECL_CONTEXT(resdecl) = decl;
+    DECL_RESULT(decl) = resdecl;
+
+    /* Initial */
+    initial = make_node(BLOCK);
+    TREE_USED(initial) = 1;
+    DECL_INITIAL(decl) = initial;
+    DECL_UNINLINABLE(decl) = 1;
+    DECL_EXTERNAL(decl) = 0;
+    DECL_PRESERVE_P(decl) = 1;
+
+    /* Func decl */
+    TREE_USED(decl) = 1;
+    TREE_PUBLIC(decl) = 1;
+    TREE_STATIC(decl) = 1;
+    DECL_ARTIFICIAL(decl) = 1;
+
+    /* Make the function */
+    push_struct_function(decl);
+    cfun->function_end_locus = BUILTINS_LOCATION;
+    gimplify_function_tree(decl);
+
+    /* Update */
+    cgraph_node::add_new_function(decl, false);
+    pop_cfun();
+
+    return;
+}
+
+
+bool is_function_clone(tree decl)
+{
+    return false;
+}
+
+
+static int cloned = 0;
+
+static unsigned int find_mv_vars_execute()
+{
+    // varpool doesn't work - we need _at least_ a list of referenced variables
+    // in the respective function
     varpool_node_ptr node;
 
-	printf("\n\nSearching multiverse variables\n");
+#ifdef DEBUG
+	fprintf(stderr, "\n**** Searching multiverse variables in ");
+    print_generic_stmt(stderr, cfun->decl, 0);
+#endif
 
 	FOR_EACH_VARIABLE(node) {
 		tree var = NODE_DECL(node);
+#ifdef DEBUG
+        fprintf(stderr, "---- Found multiverse var ");
 		print_generic_stmt(stderr, var, 0);
+#endif
 
-		if(is_multiverse_var(var)) {
-			printf("\tTHAT'S MULTIVERSE BABY!\n");
-//            clone_function_decl(NODE_DECL(cfun), 0);
-		} else {
-			printf("\tIt's NULL_TREE :(\n");
-		}
-	}
+		if(!is_multiverse_var(var))
+            continue;
 
-//    clone_function_decl(
+//        printf("\tTHAT'S MULTIVERSE BABY!\n");
+        // Get the node of cfun in the call graph to generate clones.
+        if (cloned++ == 0) {
+            generate_fn_clones(cfun->decl);
+        }
+    }
 
 	return 0;
 }
@@ -134,14 +205,13 @@ static unsigned int find_mv_vars_execute()
 #define NO_GATE
 #include "gcc-generate-gimple-pass.h"
 
-
 /*
  * Initialization function of this plugin: the very heart & soul.
  */
 int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *version)
 {
 #ifdef DEBUG
-    fprintf(stderr, "Initializing the multiverse GCC plugin.\n");
+    fprintf(stderr, "---- Initializing the multiverse GCC plugin.\n");
 #endif
 
     const char * plugin_name = info->base_name;
