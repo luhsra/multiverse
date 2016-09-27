@@ -152,11 +152,16 @@ static void generate_fn_clones(tree &fndecl)
     cgraph_node * node;
     cgraph_node * clone;
 
-//    node = cgraph_node::get_create (fndecl);
+#ifdef DEBUG
+    const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
+    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
+    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
+#endif
+
     node = get_fn_cnode(fndecl);
     new_decl = clone_fndecl(fndecl);
 
-    clone = node->create_version_clone (new_decl, vNULL, NULL);
+    clone = node->create_version_clone(new_decl, vNULL, NULL);
     clone->externally_visible = node->externally_visible;
     clone->local = node->local;
     clone->address_taken = node->address_taken;
@@ -169,53 +174,14 @@ static void generate_fn_clones(tree &fndecl)
     clone->instrumentation_clone = true;
     node->instrumented_version = clone;
 
-    if (gimple_has_body_p (fndecl))
-    {
-        tree_function_versioning (fndecl, new_decl, NULL, false,
-                NULL, false, NULL, NULL);
+    if (gimple_has_body_p(fndecl)) {
+        tree_function_versioning(fndecl, new_decl, NULL, false,
+                                 NULL, false, NULL, NULL);
         clone->lowered = true;
     }
 
-
-    return;
-//	struct cgraph_node  * fn_cnode = get_fn_cnode(decl);
-//	struct cgraph_node  * clone = cgraph_create_node(decl);
-//  tree decl = clone_function_name(orig, "my_fn_clone");
-//
-//    std::string orig_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(orig));
-//    std::string clone_name = orig_name + "_mv_clone";
-//    const char * fnname = clone_name.c_str();
-//
-//#ifdef DEBUG
-//    fprintf(stderr, "---- Generating function clones for '%s'\n", orig_name.c_str());
-//    fprintf(stderr, "---- Generating function clones for '%s'\n", clone_name.c_str());
-//#endif
-//
-//
-//	struct cgraph_node  * fn_cnode = get_fn_cnode(orig);
-//	vec<cgraph_edge *> callers = fn_cnode->collect_callers();
-////	fn_cnode->create_clone(orig, 1, 5, true, callers, true, NULL, NULL);
-//
-//    vec<ipa_replace_map *, va_gc> * trees = NULL;
-////    cgraph_node * clone = fn_cnode->create_virtual_clone(callers, trees, NULL, "__multiverse_clone");
-//
-//    cgraph_node * clone = fn_cnode->instrumented_version;
-//
-//#ifdef DEBUG
-////    fprintf(stderr, "---- Cloned call graph node '%s'\n", clone->name());
-//#endif
-//
-////    cgraph_node::add_new_function(clone->decl, false);
-//
-////    cgraph_node * clone = chkp_maybe_create_clone (orig);
-////    SET_DECL_ASSEMBLER_NAME(clone->decl, get_identifier(fnname));
-//
-//
-//
     return;
 }
-
-
 
 
 bool is_function_clone(tree decl)
