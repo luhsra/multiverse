@@ -20,6 +20,7 @@
 #include "gcc-common.h"
 #include <string>
 
+#define MV_SUFFIX ".multiverse"
 
 int plugin_is_GPL_compatible = 0xF5F3;
 
@@ -27,7 +28,7 @@ struct plugin_info mv_plugin_info = { .version = "092016" };
 
 
 /*
- * Handler of the multiverse attribute.  Currently it's only used for debugging
+ * Handler for multiverse attributing.  Currently it's only used for debugging
  * purposes but maybe we need to do something at a later point.
  */
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
@@ -108,7 +109,7 @@ static tree clone_fndecl (tree fndecl)
     new_decl = copy_node (fndecl);
 
     fname = IDENTIFIER_POINTER (DECL_NAME (fndecl));
-    fname += ".multiverse";
+    fname += MV_SUFFIX;  // ".multiverse"
     DECL_NAME (new_decl) = get_identifier (fname.c_str ());
 
     SET_DECL_ASSEMBLER_NAME (new_decl, get_identifier(fname.c_str()));
@@ -189,7 +190,7 @@ bool is_multiverse_function(tree fndecl)
         return false;
 
     fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    if (fname.find(".multiverse", 0) == std::string::npos)
+    if (fname.find(MV_SUFFIX, 0) == std::string::npos)
         return false;
 
     return true;
