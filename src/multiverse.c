@@ -99,7 +99,7 @@ static bool is_multiverse_var(tree &var)
  *
  * Code bases on chkp_maybe_create_clone().
  */
-static tree clone_fndecl (tree fndecl)
+static tree clone_fndecl (tree fndecl, std::string suffix)
 {
     tree new_decl;
     cgraph_node * node;
@@ -110,6 +110,7 @@ static tree clone_fndecl (tree fndecl)
 
     fname = IDENTIFIER_POINTER (DECL_NAME (fndecl));
     fname += MV_SUFFIX;  // ".multiverse"
+    fname += suffix.c_str();
     DECL_NAME (new_decl) = get_identifier (fname.c_str ());
 
     SET_DECL_ASSEMBLER_NAME (new_decl, get_identifier(fname.c_str()));
@@ -140,10 +141,10 @@ static tree clone_fndecl (tree fndecl)
     clone->instrumented_version = node;
     clone->orig_decl = fndecl;
     clone->instrumentation_clone = true;
-    node->instrumented_version = clone;
+//    node->instrumented_version = clone;
 
     if (gimple_has_body_p(fndecl)) {
-        tree_function_versioning(fndecl, new_decl, NULL, false,
+        tree_function_versioning(fndecl, new_decl, NULL, NULL,
                 NULL, false, NULL, NULL);
         clone->lowered = true;
     }
@@ -157,9 +158,57 @@ static tree clone_fndecl (tree fndecl)
 
 
 /*
+ * Set func ontop of the function stack.  That's required to alter the GIMPLE
+ * statements in other functions than cfun.
+ */
+static inline void set_func(function *func)
+{
+    pop_cfun();
+    push_cfun(func);
+}
+
+
+/*
+ * Add a new const variable with value to the first basic block in fndecl and
+ * replace all occurences of var with this new variable.  Later optimizations
+ * passes will remove dead code and take care of the 'specialization' of
+ * multiversed functions.
+ */
+static void replace_and_constify(tree &fndecl, tree &var, bool value)
+{
+    function * func = DECL_STRUCT_FUNCTION(fndecl);
+    set_func(func);
+
+    std::string var_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
+    if (value)
+        var_name += "_true";
+    else
+        var_name += "_false";
+
+    // add a new local variable and the corresponding assignment to the
+    // function body
+    basic_block bb;
+    tree new_var;
+
+    FOR_EACH_BB_FN(bb, func) {
+        gimple_stmt_iterator gsi;
+        gimple stmt;
+        new_var = create_tmp_var(integer_type_node, var_name.c_str());
+        new_var = make_ssa_name(new_var, gimple_build_nop());
+        stmt = gimple_build_assign(fndecl, new_var);
+        for (gsi=gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+            gsi_insert_before(&gsi, stmt, GSI_NEW_STMT);
+            break;
+        }
+        break;
+    }
+}
+
+
+/*
  * TODO: this function must change soon (adding multiverse vectors as args etc.)
  */
-static void generate_fn_clones(tree &fndecl)
+static void multiverse_function(tree &fndecl, tree &var)
 {
     tree clone;
 
@@ -168,7 +217,13 @@ static void generate_fn_clones(tree &fndecl)
     fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
 #endif
 
-    clone = clone_fndecl(fndecl);
+    clone = clone_fndecl(fndecl, "_true");
+    gcc_assert(clone != fndecl);
+
+    function *func = cfun;
+
+    replace_and_constify(clone, var, true);
+    set_func(func);
 
     return;
 }
@@ -177,7 +232,7 @@ static void generate_fn_clones(tree &fndecl)
 /*
  * Return true if fndecl is a multiversed function (i.e., cloned and
  * '.multiverse' substring in the identifier).  The substring should be enough,
- * but: better safe than sorry.
+ * but as so oftern: better safe than sorry.
  */
 bool is_multiverse_function(tree fndecl)
 {
@@ -228,9 +283,9 @@ static unsigned int find_mv_vars_execute()
 		if(!is_multiverse_var(var))
             continue;
 
+        // TODO: this must be extended to a set of variables and not only one
         if (!is_multiverse_function(cfun->decl)) {
-            generate_fn_clones(cfun->decl);
-            return 0;
+            multiverse_function(cfun->decl, var);
         } else {
 #ifdef DEBUG
             fprintf(stderr, "---- Skipping multiversed function '%s'\n", fname.c_str());
