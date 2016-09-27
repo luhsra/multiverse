@@ -156,7 +156,7 @@ static tree clone_fndecl (tree fndecl)
 
 
 /*
- *
+ * TODO: this function must change soon (adding multiverse vectors as args etc.)
  */
 static void generate_fn_clones(tree &fndecl)
 {
@@ -175,16 +175,26 @@ static void generate_fn_clones(tree &fndecl)
 
 /*
  * Return true if fndecl is a multiversed function (i.e., cloned and
- * '.multiverse' in the identifier).
+ * '.multiverse' substring in the identifier).  The substring should be enough,
+ * but: better safe than sorry.
  */
 bool is_multiverse_function(tree fndecl)
 {
-    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    return false;
+    cgraph_node * node;
+    std::string fname;
+
+    node = get_fn_cnode(fndecl);
+
+    if (!node->instrumentation_clone)
+        return false;
+
+    fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
+    if (fname.find(".multiverse", 0) == std::string::npos)
+        return false;
+
+    return true;
 }
 
-
-static int cloned = 0;
 
 /*
  * Pass to find multiverse attributed variables in the current function.  In
@@ -196,10 +206,14 @@ static unsigned int find_mv_vars_execute()
     // TODO: varpool doesn't work - we need _at least_ a list of referenced
     // variables in the respective function
     varpool_node_ptr node;
+    std::string fname;
+
+    fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
+    if (fname.compare("main") == 0)
+        return 0;
 
 #ifdef DEBUG
-	fprintf(stderr, "\n******** Searching multiverse variables in ");
-    print_generic_stmt(stderr, cfun->decl, 0);
+	fprintf(stderr, "\n******** Searching multiverse variables in '%s'\n", fname.c_str());
 #endif
 
 	FOR_EACH_VARIABLE(node) {
@@ -213,8 +227,13 @@ static unsigned int find_mv_vars_execute()
 		if(!is_multiverse_var(var))
             continue;
 
-        if (cloned++ == 0) {
+        if (!is_multiverse_function(cfun->decl)) {
             generate_fn_clones(cfun->decl);
+            return 0;
+        } else {
+#ifdef DEBUG
+            fprintf(stderr, "---- Skipping multiversed function '%s'\n", fname.c_str());
+#endif
         }
     }
 
