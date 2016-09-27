@@ -20,25 +20,15 @@
 #include "gcc-common.h"
 #include <string>
 
-// For debugging purposes
-extern void print_generic_stmt(FILE *, tree, int);
 
-/*
- * All plugins must export this symbol so that they can be loaded by GCC.
- */
 int plugin_is_GPL_compatible = 0xF5F3;
 
-
-struct plugin_info mv_plugin_info =
-{
-    .version = "092016",
-    .help = NULL,
-};
+struct plugin_info mv_plugin_info = { .version = "092016" };
 
 
 /*
- * Handler of the multiverse attribute.  Currently it's doing nothing but to
- * return NULL_TREE, but maybe we need to do something at a later point.
+ * Handler of the multiverse attribute.  Currently it's only used for debugging
+ * purposes but maybe we need to do something at a later point.
  */
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
 {
@@ -78,8 +68,7 @@ static void register_mv_attribute(void *event_data, void *data)
 
 
 /*
- * Return the call graph node of fndecl.  We need the corresponding cgrap node
- * for multiversing / cloning functions, which can only be done in the cgraph.
+ * Return the call graph node of fndecl.
  */
 struct cgraph_node *get_fn_cnode(const_tree fndecl)
 {
@@ -103,64 +92,42 @@ static bool is_multiverse_var(tree &var)
 	return true;
 }
 
-/* Build a clone of FNDECL with a modified name.  */
 
+/*
+ * Build a clone of FNDECL with a modified name.
+ *
+ * Code bases on chkp_maybe_create_clone().
+ */
 static tree clone_fndecl (tree fndecl)
-{
-  tree new_decl = copy_node (fndecl);
-  tree new_name;
-  std::string s;
-
-  s = IDENTIFIER_POINTER (DECL_NAME (fndecl));
-  s += ".multiverse";
-  DECL_NAME (new_decl) = get_identifier (s.c_str ());
-
-
-  s = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (fndecl));
-  s += ".multiverse";
-  new_name = get_identifier (s.c_str ());
-//  IDENTIFIER_TRANSPARENT_ALIAS (new_name) = 1;
-//  TREE_CHAIN (new_name) = DECL_ASSEMBLER_NAME (fndecl);
-
-  SET_DECL_ASSEMBLER_NAME (new_decl, new_name);
-
-  /* We are going to modify attributes list and therefore should
-     make own copy.  */
-  DECL_ATTRIBUTES (new_decl) = copy_list (DECL_ATTRIBUTES (fndecl));
-
-  /* Change builtin function code.  */
-  if (DECL_BUILT_IN (new_decl))
-    {
-      gcc_assert (DECL_BUILT_IN_CLASS (new_decl) == BUILT_IN_NORMAL);
-      gcc_assert (DECL_FUNCTION_CODE (new_decl) < BEGIN_CHKP_BUILTINS);
-      DECL_FUNCTION_CODE (new_decl)
-	= (enum built_in_function)(DECL_FUNCTION_CODE (new_decl)
-				   + BEGIN_CHKP_BUILTINS + 1);
-    }
-
-  DECL_FUNCTION_CODE (new_decl);
-  return new_decl;
-}
-
-
-#include <tree-chkp.h>
-extern cgraph_node *chkp_maybe_create_clone (tree fndecl);
-
-static void generate_fn_clones(tree &fndecl)
 {
     tree new_decl;
     cgraph_node * node;
     cgraph_node * clone;
+    std::string fname;
 
-#ifdef DEBUG
-    const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
-    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
-#endif
+    new_decl = copy_node (fndecl);
+
+    fname = IDENTIFIER_POINTER (DECL_NAME (fndecl));
+    fname += ".multiverse";
+    DECL_NAME (new_decl) = get_identifier (fname.c_str ());
+
+    SET_DECL_ASSEMBLER_NAME (new_decl, get_identifier(fname.c_str()));
+
+    // Not sure if we need to copy the attributes list: better safe than sorry
+    DECL_ATTRIBUTES (new_decl) = copy_list (DECL_ATTRIBUTES (fndecl));
+
+    // Change builtin function code
+    if (DECL_BUILT_IN (new_decl)) {
+        gcc_assert (DECL_BUILT_IN_CLASS (new_decl) == BUILT_IN_NORMAL);
+        gcc_assert (DECL_FUNCTION_CODE (new_decl) < BEGIN_CHKP_BUILTINS);
+        DECL_FUNCTION_CODE (new_decl)= (enum built_in_function)
+                                       (DECL_FUNCTION_CODE (new_decl)
+                                       + BEGIN_CHKP_BUILTINS + 1);
+    }
+
+    DECL_FUNCTION_CODE (new_decl);
 
     node = get_fn_cnode(fndecl);
-    new_decl = clone_fndecl(fndecl);
-
     clone = node->create_version_clone(new_decl, vNULL, NULL);
     clone->externally_visible = node->externally_visible;
     clone->local = node->local;
@@ -176,26 +143,58 @@ static void generate_fn_clones(tree &fndecl)
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, false,
-                                 NULL, false, NULL, NULL);
+                NULL, false, NULL, NULL);
         clone->lowered = true;
     }
+
+#ifdef DEBUG
+    fprintf(stderr, "---- Generated function clone '%s'\n", fname.c_str());
+#endif
+
+    return new_decl;
+}
+
+
+/*
+ *
+ */
+static void generate_fn_clones(tree &fndecl)
+{
+    tree clone;
+
+#ifdef DEBUG
+    const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
+    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
+#endif
+
+    clone = clone_fndecl(fndecl);
 
     return;
 }
 
 
-bool is_function_clone(tree decl)
+/*
+ * Return true if fndecl is a multiversed function (i.e., cloned and
+ * '.multiverse' in the identifier).
+ */
+bool is_multiverse_function(tree fndecl)
 {
+    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     return false;
 }
 
 
 static int cloned = 0;
 
+/*
+ * Pass to find multiverse attributed variables in the current function.  In
+ * case such variables are used in conditional statements, the functions is
+ * cloned and specialized (constant propagation, etc.).
+ */
 static unsigned int find_mv_vars_execute()
 {
-    // varpool doesn't work - we need _at least_ a list of referenced variables
-    // in the respective function
+    // TODO: varpool doesn't work - we need _at least_ a list of referenced
+    // variables in the respective function
     varpool_node_ptr node;
 
 #ifdef DEBUG
@@ -239,12 +238,6 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     const char * plugin_name = info->base_name;
     struct register_pass_info find_mv_vars_info;
 
-    find_mv_vars_info.pass = make_find_mv_vars_pass();
-    find_mv_vars_info.reference_pass_name = "ssa";
-    find_mv_vars_info.ref_pass_instance_number = 1;
-    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER;
-
-
     if (!plugin_default_version_check(version, &gcc_version)) {
         error(G_("incompatible gcc/plugin versions"));
         return 1;
@@ -257,6 +250,10 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
 
     // register the multiverse GIMPLE pass
+    find_mv_vars_info.pass = make_find_mv_vars_pass();
+    find_mv_vars_info.reference_pass_name = "ssa";
+    find_mv_vars_info.ref_pass_instance_number = 1;
+    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER;
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
 
     return 0;
