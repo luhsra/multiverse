@@ -170,7 +170,7 @@ static inline void set_func(function *func)
 
 /*
  * Add a new const variable with value to the first basic block in fndecl and
- * replace all occurences of var with this new variable.  Later optimizations
+ * replace all occurrences of var with this new variable.  Later optimizations
  * passes will remove dead code and take care of the 'specialization' of
  * multiversed functions.
  */
@@ -185,23 +185,26 @@ static void replace_and_constify(tree &fndecl, tree &var, bool value)
     else
         var_name += "_false";
 
-    // add a new local variable and the corresponding assignment to the
-    // function body
+    /*
+     * Add a new local variable and the corresponding assignment to the first
+     * basic block of fndecl.
+     */
     basic_block bb;
     tree new_var;
+    gimple_stmt_iterator gsi;
+    gimple stmt;
 
-    FOR_EACH_BB_FN(bb, func) {
-        gimple_stmt_iterator gsi;
-        gimple stmt;
-        new_var = create_tmp_var(integer_type_node, var_name.c_str());
-        new_var = make_ssa_name(new_var, gimple_build_nop());
-        stmt = gimple_build_assign(fndecl, new_var);
-        for (gsi=gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
-            gsi_insert_before(&gsi, stmt, GSI_NEW_STMT);
-            break;
-        }
-        break;
-    }
+    bb  = BASIC_BLOCK_FOR_FN(func, 0);
+    new_var = create_tmp_var(integer_type_node, var_name.c_str());
+    new_var = make_ssa_name(new_var, gimple_build_nop());
+    stmt = gimple_build_assign(fndecl, new_var);
+    gsi=gsi_start_bb(bb);
+    gsi_insert_before(&gsi, stmt, GSI_NEW_STMT);
+
+    /*
+     * Replace all occurrences of var with the newly added const variable.
+     */
+
 }
 
 
