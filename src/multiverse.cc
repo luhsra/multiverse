@@ -151,9 +151,9 @@ static tree clone_fndecl (tree fndecl, std::string suffix)
         clone->lowered = true;
     }
 
-    #ifdef DEBUG
+#ifdef DEBUG
     fprintf(stderr, "---- Generated function clone '%s'\n", fname.c_str());
-    #endif
+#endif
 
     return new_decl;
 }
@@ -184,10 +184,10 @@ static void replace_and_constify(tree old_var, const int value)
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple stmt = gsi_stmt(gsi);
 
-            #ifdef DEBUG
+#ifdef DEBUG
             fprintf(stderr, "---- Checking operands in statement: ");
             print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
-            #endif
+#endif
 
             if (!is_gimple_assign(stmt)) {
                 #ifdef DEBUG
@@ -260,23 +260,23 @@ bool is_cloneable_function(tree fndecl)
  * case such variables are used in conditional statements, the functions is
  * cloned and specialized (constant propagation, etc.).
  */
-#include <vector>
+#include <set>
 static unsigned int find_mv_vars_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
     if (!is_cloneable_function(cfun->decl)) {
-        #ifdef DEBUG
+#ifdef DEBUG
         fprintf(stderr, "---- Skipping non-multiverseable function '%s'\n", fname.c_str());
-        #endif
+#endif
         return 0;
     }
 
-    #ifdef DEBUG
+#ifdef DEBUG
 	fprintf(stderr, "\n******** Searching multiverse variables in '%s'\n", fname.c_str());
-    #endif
+#endif
 
-    std::vector<tree> mv_vars;
+    std::set<tree> mv_vars;
 	basic_block bb;
     // iterate of each basic block in current function
 	FOR_EACH_BB_FN(bb, cfun) {
@@ -285,24 +285,24 @@ static unsigned int find_mv_vars_execute()
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple stmt = gsi_stmt(gsi);
 
-            #ifdef DEBUG
+#ifdef DEBUG
             fprintf(stderr, "---- Checking operands in statement: ");
             print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
-            #endif
+#endif
 
             if (!is_gimple_assign(stmt)) {
-                #ifdef DEBUG
+#ifdef DEBUG
                 fprintf (stderr, "...skipping non-assign statement\n");
-                #endif
+#endif
                 continue;
             }
 
             // if left hand side is a multiverse var skip the function
             tree lhs = gimple_assign_lhs(stmt);
             if (is_multiverse_var(lhs)) {
-                #ifdef DEBUG
+#ifdef DEBUG
                 fprintf(stderr, "...skipping function: assign to multiverse variable\n");
-                #endif
+#endif
                 return 0;
             }
 
@@ -313,15 +313,26 @@ static unsigned int find_mv_vars_execute()
                 if (!is_multiverse_var(var))
                     continue;
 
-                #ifdef DEBUG
+#ifdef DEBUG
                 fprintf(stderr, "...found multiverse operand: ");
                 print_generic_stmt(stderr, var, 0);
-                #endif
-                mv_vars.push_back(var);
-                replace_and_constify(var, true);
-                return 0;
+#endif
+                mv_vars.insert(var);
             }
         }
+    }
+
+#ifdef DEBUG
+    fprintf(stderr, "...found '%d' multiverse variables\n", mv_vars.size());
+#endif
+    std::set<tree>::iterator trit;
+    for (trit = mv_vars.begin(); trit != mv_vars.end(); trit++) {
+        tree var = *trit;
+#ifdef DEBUG
+        fprintf(stderr, "...replace and constify: ");
+        print_generic_stmt(stderr, var, 0);
+#endif
+        replace_and_constify(var, true);
     }
 
     return 0;

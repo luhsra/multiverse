@@ -14,7 +14,6 @@ int foo(int a, short b, char c)
     else
         printf("!~configA\n");
 
-    configA = 23;
     return 42;
 }
 
