@@ -10,8 +10,8 @@ PLUGIN= multiverse
 GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
 CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -O0
 
-all: $(PLUGIN).c
-	$(HOST_GCC) -shared $(CXXFLAGS) $(PLUGIN).c -o $(PLUGIN).so
+all: $(PLUGIN).cc
+	$(HOST_GCC) -shared $(CXXFLAGS) $(PLUGIN).cc -o $(PLUGIN).so
 
 clean:
 	rm -f *.o *.so test
@@ -19,7 +19,7 @@ clean:
 
 # DEBUGGING & TESTING
 
-debug: CXXFLAGS+= -DDEBUG
+debug: CXXFLAGS+= -DDEBUG -g
 debug: all
 
 test: test_1

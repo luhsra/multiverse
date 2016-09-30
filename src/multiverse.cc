@@ -87,10 +87,13 @@ struct cgraph_node *get_fn_cnode(const_tree fndecl)
  */
 static bool is_multiverse_var(tree &var)
 {
-	tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(var));
-	if(attr == NULL_TREE)
-		return false;
-	return true;
+    if (!is_global_var(var) || TREE_CODE(var) != VAR_DECL)
+        return false;
+
+    tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(var));
+    if(attr == NULL_TREE)
+        return false;
+    return true;
 }
 
 
@@ -141,7 +144,6 @@ static tree clone_fndecl (tree fndecl, std::string suffix)
     clone->instrumented_version = node;
     clone->orig_decl = fndecl;
     clone->instrumentation_clone = true;
-//    node->instrumented_version = clone;
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
@@ -149,16 +151,16 @@ static tree clone_fndecl (tree fndecl, std::string suffix)
         clone->lowered = true;
     }
 
-#ifdef DEBUG
+    #ifdef DEBUG
     fprintf(stderr, "---- Generated function clone '%s'\n", fname.c_str());
-#endif
+    #endif
 
     return new_decl;
 }
 
 
 /*
- * Set func ontop of the function stack.  That's required to alter the GIMPLE
+ * Push func the function stack.  That's required to alter the GIMPLE
  * statements in other functions than cfun.
  */
 static inline void set_func(function *func)
@@ -169,42 +171,45 @@ static inline void set_func(function *func)
 
 
 /*
- * Add a new const variable with value to the first basic block in fndecl and
- * replace all occurrences of var with this new variable.  Later optimizations
- * passes will remove dead code and take care of the 'specialization' of
- * multiversed functions.
+ * Replace all occurrences of var in cfun with value.
  */
-static void replace_and_constify(tree &fndecl, tree &var, bool value)
+static void replace_and_constify(tree old_var, const int value)
 {
-    function * func = DECL_STRUCT_FUNCTION(fndecl);
-    set_func(func);
+    tree new_var = build_int_cst(TREE_TYPE(old_var), value);
 
-    std::string var_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
-    if (value)
-        var_name += "_true";
-    else
-        var_name += "_false";
-
-    /*
-     * Add a new local variable and the corresponding assignment to the first
-     * basic block of fndecl.
-     */
     basic_block bb;
-    tree new_var;
-    gimple_stmt_iterator gsi;
-    gimple stmt;
+	FOR_EACH_BB_FN(bb, cfun) {
+        // iterate over each GIMPLE statement
+        gimple_stmt_iterator gsi;
+        for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+            gimple stmt = gsi_stmt(gsi);
 
-    bb  = BASIC_BLOCK_FOR_FN(func, 0);
-    new_var = create_tmp_var(integer_type_node, var_name.c_str());
-    new_var = make_ssa_name(new_var, gimple_build_nop());
-    stmt = gimple_build_assign(fndecl, new_var);
-    gsi=gsi_start_bb(bb);
-    gsi_insert_before(&gsi, stmt, GSI_NEW_STMT);
+            #ifdef DEBUG
+            fprintf(stderr, "---- Checking operands in statement: ");
+            print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
+            #endif
 
-    /*
-     * Replace all occurrences of var with the newly added const variable.
-     */
+            if (!is_gimple_assign(stmt)) {
+                #ifdef DEBUG
+                fprintf (stderr, "...skipping non-assign statement\n");
+                #endif
+                continue;
+            }
 
+            // check if any operand is a multiverse variable
+            for (int num = 1; num < gimple_num_ops(stmt); num++) {
+                tree var = gimple_op(stmt, num);
+                if (var != old_var)
+                    continue;
+
+                gimple_set_op(stmt, num, new_var);
+                update_stmt(stmt);
+                update_stmt_if_modified (stmt);
+                fprintf(stderr, "...replacing operand in this statement: ");
+                print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
+            }
+        }
+    }
 }
 
 
@@ -225,7 +230,8 @@ static void multiverse_function(tree &fndecl, tree &var)
 
     function *func = cfun;
 
-    replace_and_constify(clone, var, true);
+    // TODO: don't forget to change cfun!
+//    replace_and_constify(clone, var, true);
     set_func(func);
 
     return;
@@ -233,22 +239,16 @@ static void multiverse_function(tree &fndecl, tree &var)
 
 
 /*
- * Return true if fndecl is a multiversed function (i.e., cloned and
- * '.multiverse' substring in the identifier).  The substring should be enough,
- * but as so oftern: better safe than sorry.
+ * Return true if fndecl is cloneable (i.e., not main and not multiversed).
  */
-bool is_multiverse_function(tree fndecl)
+bool is_cloneable_function(tree fndecl)
 {
-    cgraph_node * node;
-    std::string fname;
+    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
 
-    node = get_fn_cnode(fndecl);
-
-    if (!node->instrumentation_clone)
+    if (fname.compare("main") == 0)
         return false;
 
-    fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    if (fname.find(MV_SUFFIX, 0) == std::string::npos)
+    if (fname.find(MV_SUFFIX, 0) != std::string::npos)
         return false;
 
     return true;
@@ -260,43 +260,71 @@ bool is_multiverse_function(tree fndecl)
  * case such variables are used in conditional statements, the functions is
  * cloned and specialized (constant propagation, etc.).
  */
+#include <vector>
 static unsigned int find_mv_vars_execute()
 {
-    // TODO: varpool doesn't work - we need _at least_ a list of referenced
-    // variables in the respective function
-    varpool_node_ptr node;
-    std::string fname;
+    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
-    fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
-    if (fname.compare("main") == 0)
+    if (!is_cloneable_function(cfun->decl)) {
+        #ifdef DEBUG
+        fprintf(stderr, "---- Skipping non-multiverseable function '%s'\n", fname.c_str());
+        #endif
         return 0;
+    }
 
-#ifdef DEBUG
+    #ifdef DEBUG
 	fprintf(stderr, "\n******** Searching multiverse variables in '%s'\n", fname.c_str());
-#endif
+    #endif
 
-	FOR_EACH_VARIABLE(node) {
-		tree var = NODE_DECL(node);
+    std::vector<tree> mv_vars;
+	basic_block bb;
+    // iterate of each basic block in current function
+	FOR_EACH_BB_FN(bb, cfun) {
+        // iterate over each GIMPLE statement
+        gimple_stmt_iterator gsi;
+        for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
+            gimple stmt = gsi_stmt(gsi);
 
-#ifdef DEBUG
-        fprintf(stderr, "---- Found multiverse var ");
-		print_generic_stmt(stderr, var, 0);
-#endif
+            #ifdef DEBUG
+            fprintf(stderr, "---- Checking operands in statement: ");
+            print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
+            #endif
 
-		if(!is_multiverse_var(var))
-            continue;
+            if (!is_gimple_assign(stmt)) {
+                #ifdef DEBUG
+                fprintf (stderr, "...skipping non-assign statement\n");
+                #endif
+                continue;
+            }
 
-        // TODO: this must be extended to a set of variables and not only one
-        if (!is_multiverse_function(cfun->decl)) {
-            multiverse_function(cfun->decl, var);
-        } else {
-#ifdef DEBUG
-            fprintf(stderr, "---- Skipping multiversed function '%s'\n", fname.c_str());
-#endif
+            // if left hand side is a multiverse var skip the function
+            tree lhs = gimple_assign_lhs(stmt);
+            if (is_multiverse_var(lhs)) {
+                #ifdef DEBUG
+                fprintf(stderr, "...skipping function: assign to multiverse variable\n");
+                #endif
+                return 0;
+            }
+
+            // check if any operand is a multiverse variable
+            for (int num = 1; num < gimple_num_ops(stmt); num++) {
+                tree var = gimple_op(stmt, num);
+
+                if (!is_multiverse_var(var))
+                    continue;
+
+                #ifdef DEBUG
+                fprintf(stderr, "...found multiverse operand: ");
+                print_generic_stmt(stderr, var, 0);
+                #endif
+                mv_vars.push_back(var);
+                replace_and_constify(var, true);
+                return 0;
+            }
         }
     }
 
-	return 0;
+    return 0;
 }
 
 
