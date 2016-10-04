@@ -4,7 +4,7 @@
  *
  *
  * This GCC plugin adds support for multiversing functions, as described by
- * [1,2].  Currently, the multiverse support is limited to boolean variables
+ * [1,2].  Currently, the multiverse support is limited to 'boolean' variables
  * that must be attributed with 'multiverse'.
  *
  *
@@ -24,7 +24,7 @@
 
 int plugin_is_GPL_compatible = 0xF5F3;
 
-struct plugin_info mv_plugin_info = { .version = "092016" };
+struct plugin_info mv_plugin_info = { .version = "102016" };
 
 
 /*
@@ -102,7 +102,7 @@ static bool is_multiverse_var(tree &var)
  *
  * Code bases on chkp_maybe_create_clone().
  */
-static tree clone_fndecl (tree fndecl, std::string suffix)
+static tree clone_fndecl(tree fndecl, std::string suffix)
 {
     tree new_decl;
     cgraph_node * node;
@@ -111,23 +111,23 @@ static tree clone_fndecl (tree fndecl, std::string suffix)
 
     new_decl = copy_node (fndecl);
 
-    fname = IDENTIFIER_POINTER (DECL_NAME (fndecl));
+    fname = IDENTIFIER_POINTER(DECL_NAME(fndecl));
     fname += MV_SUFFIX;  // ".multiverse"
     fname += suffix.c_str();
-    DECL_NAME (new_decl) = get_identifier (fname.c_str ());
+    DECL_NAME(new_decl) = get_identifier(fname.c_str ());
 
-    SET_DECL_ASSEMBLER_NAME (new_decl, get_identifier(fname.c_str()));
+    SET_DECL_ASSEMBLER_NAME(new_decl, get_identifier(fname.c_str()));
 
     // Not sure if we need to copy the attributes list: better safe than sorry
-    DECL_ATTRIBUTES (new_decl) = copy_list (DECL_ATTRIBUTES (fndecl));
+    DECL_ATTRIBUTES(new_decl) = copy_list(DECL_ATTRIBUTES(fndecl));
 
     // Change builtin function code
     if (DECL_BUILT_IN (new_decl)) {
-        gcc_assert (DECL_BUILT_IN_CLASS (new_decl) == BUILT_IN_NORMAL);
-        gcc_assert (DECL_FUNCTION_CODE (new_decl) < BEGIN_CHKP_BUILTINS);
-        DECL_FUNCTION_CODE (new_decl)= (enum built_in_function)
-                                       (DECL_FUNCTION_CODE (new_decl)
-                                       + BEGIN_CHKP_BUILTINS + 1);
+        gcc_assert(DECL_BUILT_IN_CLASS(new_decl) == BUILT_IN_NORMAL);
+        gcc_assert(DECL_FUNCTION_CODE(new_decl) < BEGIN_CHKP_BUILTINS);
+        DECL_FUNCTION_CODE (new_decl) = (enum built_in_function)
+                                        (DECL_FUNCTION_CODE (new_decl)
+                                        + BEGIN_CHKP_BUILTINS + 1);
     }
 
     DECL_FUNCTION_CODE (new_decl);
@@ -189,7 +189,7 @@ static void replace_and_constify(tree old_var, const int value)
 
             if (!is_gimple_assign(stmt)) {
                 #ifdef DEBUG
-                fprintf (stderr, "...skipping non-assign statement\n");
+                fprintf(stderr, "...skipping non-assign statement\n");
                 #endif
                 continue;
             }
@@ -202,7 +202,7 @@ static void replace_and_constify(tree old_var, const int value)
 
                 gimple_set_op(stmt, num, new_var);
                 update_stmt(stmt);
-                update_stmt_if_modified (stmt);
+                update_stmt_if_modifie (stmt);
                 fprintf(stderr, "...replacing operand in this statement: ");
                 print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
             }

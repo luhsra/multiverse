@@ -10,10 +10,10 @@ int foo()
     int res;
 
     if (configA) {
-        printf("configA = true");
+        printf("configA = true\n");
         res = 1;
     } else {
-        printf("configA = false");
+        printf("configA = false\n");
         res = 0;
     }
 
@@ -31,6 +31,8 @@ int main(int argc, char **argv)
         int a;
         a= 3;
     }
+
+    foo();
 
     return 0;
 }
