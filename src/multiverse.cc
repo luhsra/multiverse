@@ -109,12 +109,12 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
     cgraph_node * clone;
     std::string fname;
 
-    new_decl = copy_node (fndecl);
+    new_decl = copy_node(fndecl);
 
     fname = IDENTIFIER_POINTER(DECL_NAME(fndecl));
     fname += MV_SUFFIX;  // ".multiverse"
     fname += suffix.c_str();
-    DECL_NAME(new_decl) = get_identifier(fname.c_str ());
+    DECL_NAME(new_decl) = get_identifier(fname.c_str());
 
     SET_DECL_ASSEMBLER_NAME(new_decl, get_identifier(fname.c_str()));
 
@@ -122,15 +122,15 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
     DECL_ATTRIBUTES(new_decl) = copy_list(DECL_ATTRIBUTES(fndecl));
 
     // Change builtin function code
-    if (DECL_BUILT_IN (new_decl)) {
+    if (DECL_BUILT_IN(new_decl)) {
         gcc_assert(DECL_BUILT_IN_CLASS(new_decl) == BUILT_IN_NORMAL);
         gcc_assert(DECL_FUNCTION_CODE(new_decl) < BEGIN_CHKP_BUILTINS);
-        DECL_FUNCTION_CODE (new_decl) = (enum built_in_function)
-                                        (DECL_FUNCTION_CODE (new_decl)
-                                        + BEGIN_CHKP_BUILTINS + 1);
+        DECL_FUNCTION_CODE(new_decl) = (enum built_in_function)
+                                       (DECL_FUNCTION_CODE(new_decl)
+                                       + BEGIN_CHKP_BUILTINS + 1);
     }
 
-    DECL_FUNCTION_CODE (new_decl);
+    DECL_FUNCTION_CODE(new_decl);
 
     node = get_fn_cnode(fndecl);
     clone = node->create_version_clone(new_decl, vNULL, NULL);
@@ -202,7 +202,7 @@ static void replace_and_constify(tree old_var, const int value)
 
                 gimple_set_op(stmt, num, new_var);
                 update_stmt(stmt);
-                update_stmt_if_modifie (stmt);
+                update_stmt_if_modifie(stmt);
                 fprintf(stderr, "...replacing operand in this statement: ");
                 print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
             }
@@ -298,7 +298,7 @@ static unsigned int find_mv_vars_execute()
 
             if (!is_gimple_assign(stmt)) {
 #ifdef DEBUG
-                fprintf (stderr, "...skipping non-assign statement\n");
+                fprintf(stderr, "...skipping non-assign statement\n");
 #endif
                 continue;
             }
