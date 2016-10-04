@@ -2,19 +2,22 @@
 
 typedef enum { false, true } bool;
 
-static __attribute__((multiverse)) int configA = true;
+__attribute__((multiverse)) int configA = true;
 
 
-int foo(int a, short b, char c)
+int foo()
 {
-    int cc =  a + configA + c;
+    int res;
 
-    if (configA)
-        printf("configA\n");
-    else
-        printf("!~configA\n");
+    if (configA) {
+        printf("configA = true");
+        res = 1;
+    } else {
+        printf("configA = false");
+        res = 0;
+    }
 
-    return 42;
+    return res;
 }
 
 
@@ -22,7 +25,7 @@ int main(int argc, char **argv)
 {
     printf("Hallo Welt\n");
 
-    foo(0, 1, 2);
+    foo();
 
     if (configA) {
         int a;

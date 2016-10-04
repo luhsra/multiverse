@@ -134,16 +134,14 @@ static tree clone_fndecl (tree fndecl, std::string suffix)
 
     node = get_fn_cnode(fndecl);
     clone = node->create_version_clone(new_decl, vNULL, NULL);
-    clone->externally_visible = node->externally_visible;
+    clone->externally_visible = true;   // just to avoid being removed
     clone->local = node->local;
     clone->address_taken = node->address_taken;
     clone->thunk = node->thunk;
     clone->alias = node->alias;
     clone->weakref = node->weakref;
     clone->cpp_implicit_alias = node->cpp_implicit_alias;
-    clone->instrumented_version = node;
     clone->orig_decl = fndecl;
-    clone->instrumentation_clone = true;
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
@@ -218,22 +216,30 @@ static void replace_and_constify(tree old_var, const int value)
  */
 static void multiverse_function(tree &fndecl, tree &var)
 {
-    tree clone;
-
 #ifdef DEBUG
     const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
 #endif
 
+    tree clone;
+    function * func;
+    function * old_func = cfun;
+
+    // case TRUE
     clone = clone_fndecl(fndecl, "_true");
     gcc_assert(clone != fndecl);
-
-    function *func = cfun;
-
-    // TODO: don't forget to change cfun!
-//    replace_and_constify(clone, var, true);
+    func = DECL_STRUCT_FUNCTION(clone);
     set_func(func);
+    replace_and_constify(var, true);
 
+    // case FALSE
+    clone = clone_fndecl(fndecl, "_false");
+    gcc_assert(clone != fndecl);
+    func = DECL_STRUCT_FUNCTION(clone);
+    set_func(func);
+    replace_and_constify(var, false);
+
+    set_func(old_func);
     return;
 }
 
@@ -332,7 +338,8 @@ static unsigned int find_mv_vars_execute()
         fprintf(stderr, "...replace and constify: ");
         print_generic_stmt(stderr, var, 0);
 #endif
-        replace_and_constify(var, true);
+//        replace_and_constify(var, true);
+        multiverse_function(cfun->decl, var);
     }
 
     return 0;
@@ -368,9 +375,9 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
 
     // register the multiverse GIMPLE pass
     find_mv_vars_info.pass = make_find_mv_vars_pass();
-    find_mv_vars_info.reference_pass_name = "ssa";
-    find_mv_vars_info.ref_pass_instance_number = 1;
-    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER;
+    find_mv_vars_info.reference_pass_name = "early_optimizations";
+    find_mv_vars_info.ref_pass_instance_number = 0;
+    find_mv_vars_info.pos_op = PASS_POS_INSERT_BEFORE;
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
 
     return 0;
