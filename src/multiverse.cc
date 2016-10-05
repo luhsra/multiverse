@@ -339,9 +339,9 @@ static unsigned int find_mv_vars_execute()
 #ifdef DEBUG
     fprintf(stderr, "...found '%d' multiverse variables\n", mv_vars.size());
 #endif
-    std::set<tree>::iterator trit;
-    for (trit = mv_vars.begin(); trit != mv_vars.end(); trit++) {
-        tree var = *trit;
+    std::set<tree>::iterator varit;
+    for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
+        tree var = *varit;
 #ifdef DEBUG
         fprintf(stderr, "...replace and constify: ");
         print_generic_stmt(stderr, var, 0);
