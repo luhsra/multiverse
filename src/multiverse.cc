@@ -23,7 +23,7 @@
 
 #define MV_SUFFIX ".multiverse"
 
-int plugin_is_GPL_compatible = 0xF5F3;
+int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "10.2016" };
 
@@ -40,12 +40,10 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
     print_generic_stmt(stderr, *node, 0);
 #endif
 
-    if (TREE_CODE(TREE_TYPE(*node)) != INTEGER_TYPE) {
-        // TODO : this should generate a real compiler error
-        fprintf(stderr, "This plugin only supports multiversing integer types: ");
-        print_generic_stmt(stderr, *node, 0);
-        exit(-1);
-    }
+    int type = TREE_CODE(TREE_TYPE(*node));
+    if (type != INTEGER_TYPE && type != ENUMERAL_TYPE)
+        error("variable %qD with %qE attribute must be an integer "
+              "or enumeral type", *node, name);
 
     return NULL_TREE;
 }
@@ -114,10 +112,10 @@ static bool is_multiverse_var(tree &var)
  */
 static tree clone_fndecl(tree fndecl, std::string suffix)
 {
+    std::string fname;
     tree new_decl;
     cgraph_node * node;
     cgraph_node * clone;
-    std::string fname;
 
     new_decl = copy_node(fndecl);
 
@@ -221,18 +219,20 @@ static void replace_and_constify(tree old_var, const int value)
 
 
 /*
- * TODO: this function must change soon (adding multiverse vectors as args etc.)
+ * TODO: this function may change as soon as we've figured out how to deal with
+ * combinations of multiverse variabled
  */
-static void multiverse_function(tree &fndecl, tree &var)
+static void multiverse_function(tree &var)
 {
+    tree fndecl = cfun->decl;
+    tree clone;
+    function * old_func = cfun;
+    function * func;
+
 #ifdef DEBUG
     const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
 #endif
-
-    tree clone;
-    function * old_func = cfun;
-    function * func;
 
     // case TRUE
     clone = clone_fndecl(fndecl, "_true");
@@ -346,8 +346,7 @@ static unsigned int find_mv_vars_execute()
         fprintf(stderr, "...replace and constify: ");
         print_generic_stmt(stderr, var, 0);
 #endif
-//        replace_and_constify(var, true);
-        multiverse_function(cfun->decl, var);
+        multiverse_function(var);
     }
 
     return 0;

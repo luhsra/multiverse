@@ -2,7 +2,7 @@
 
 typedef enum { false, true } bool;
 
-__attribute__((multiverse)) int configA = true;
+__attribute__((multiverse)) bool configA = true;
 
 //__attribute__((multiverse)) int * break_it;
 
@@ -18,7 +18,8 @@ int foo()
         printf("configA = false\n");
         res = 0;
     }
-    int * pointer = &configA;
+
+    bool * pointer = &configA;
     if (*pointer)
         printf("POINTER\n");
 
