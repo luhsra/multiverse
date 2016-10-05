@@ -18,6 +18,7 @@
  */
 
 #include "gcc-common.h"
+#include <set>
 #include <string>
 
 #define MV_SUFFIX ".multiverse"
@@ -41,7 +42,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 
     if (TREE_CODE(TREE_TYPE(*node)) != INTEGER_TYPE) {
         // TODO : this should generate a real compiler error
-        fprintf(stderr, "This plugin only supports multiversing for boolean/integer types: ");
+        fprintf(stderr, "This plugin only supports multiversing integer types: ");
         print_generic_stmt(stderr, *node, 0);
         exit(-1);
     }
@@ -274,7 +275,6 @@ bool is_cloneable_function(tree fndecl)
  * case such variables are used in conditional statements, the functions is
  * cloned and specialized (constant propagation, etc.).
  */
-#include <set>
 static unsigned int find_mv_vars_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
@@ -385,7 +385,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     find_mv_vars_info.pass = make_find_mv_vars_pass();
     find_mv_vars_info.reference_pass_name = "early_optimizations";
     find_mv_vars_info.ref_pass_instance_number = 0;
-    find_mv_vars_info.pos_op = PASS_POS_INSERT_BEFORE;
+    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
 
     return 0;

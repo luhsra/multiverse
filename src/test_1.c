@@ -18,6 +18,9 @@ int foo()
         printf("configA = false\n");
         res = 0;
     }
+    int * pointer = &configA;
+    if (*pointer)
+        printf("POINTER\n");
 
     return res;
 }
@@ -25,7 +28,7 @@ int foo()
 
 int main(int argc, char **argv)
 {
-    printf("Hallo Welt\n");
+    printf("Hello multiverse!\n");
 
     foo();
 
@@ -33,8 +36,6 @@ int main(int argc, char **argv)
         int a;
         a= 3;
     }
-
-    foo();
 
     return 0;
 }
