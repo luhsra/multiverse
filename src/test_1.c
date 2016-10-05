@@ -4,6 +4,8 @@ typedef enum { false, true } bool;
 
 __attribute__((multiverse)) int configA = true;
 
+//__attribute__((multiverse)) int * break_it;
+
 
 int foo()
 {

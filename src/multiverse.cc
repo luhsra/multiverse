@@ -24,19 +24,28 @@
 
 int plugin_is_GPL_compatible = 0xF5F3;
 
-struct plugin_info mv_plugin_info = { .version = "102016" };
+struct plugin_info mv_plugin_info = { .version = "10.2016" };
 
 
 /*
  * Handler for multiverse attributing.  Currently it's only used for debugging
  * purposes but maybe we need to do something at a later point.
  */
-static tree handle_mv_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
+static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
+                                bool *no_add_attrs)
 {
 #ifdef DEBUG
     fprintf(stderr, "---- attributing MULTIVERSE variable ");
     print_generic_stmt(stderr, *node, 0);
 #endif
+
+    if (TREE_CODE(TREE_TYPE(*node)) != INTEGER_TYPE) {
+        // TODO : this should generate a real compiler error
+        fprintf(stderr, "This plugin only supports multiversing for boolean/integer types: ");
+        print_generic_stmt(stderr, *node, 0);
+        exit(-1);
+    }
+
     return NULL_TREE;
 }
 
@@ -145,7 +154,7 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
-                NULL, false, NULL, NULL);
+                                 NULL, false, NULL, NULL);
         clone->lowered = true;
     }
 
@@ -202,7 +211,6 @@ static void replace_and_constify(tree old_var, const int value)
 
                 gimple_set_op(stmt, num, new_var);
                 update_stmt(stmt);
-                update_stmt_if_modifie(stmt);
                 fprintf(stderr, "...replacing operand in this statement: ");
                 print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
             }
@@ -222,8 +230,8 @@ static void multiverse_function(tree &fndecl, tree &var)
 #endif
 
     tree clone;
-    function * func;
     function * old_func = cfun;
+    function * func;
 
     // case TRUE
     clone = clone_fndecl(fndecl, "_true");

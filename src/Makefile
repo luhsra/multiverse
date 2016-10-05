@@ -26,7 +26,7 @@ test: test_1
 
 test_1: debug
 	rm -f test_1 test_1.c.*
-	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized -O2
+	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized $(CFLAGS)
 	less test_1.c.211t.optimized
 
 .PHONY= all clean debug test
