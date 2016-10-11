@@ -26,6 +26,14 @@ int foo()
     return res;
 }
 
+void lvalue_func()
+{
+    if (configA)
+        foo();
+
+    configA = 0x42;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -33,10 +41,13 @@ int main(int argc, char **argv)
 
     foo();
 
+
     if (configA) {
         int a;
         a= 3;
     }
+
+    lvalue_func();
 
     return 0;
 }

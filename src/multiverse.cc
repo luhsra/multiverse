@@ -222,7 +222,7 @@ static void replace_and_constify(tree old_var, const int value)
  * TODO: this function may change as soon as we've figured out how to deal with
  * combinations of multiverse variabled
  */
-static void multiverse_function(tree &var)
+static void multiverse_function(tree var)
 {
     tree fndecl = cfun->decl;
     tree clone;
@@ -281,20 +281,22 @@ static unsigned int find_mv_vars_execute()
 
     if (!is_cloneable_function(cfun->decl)) {
 #ifdef DEBUG
-        fprintf(stderr, "---- Skipping non-multiverseable function '%s'\n", fname.c_str());
+        fprintf(stderr, "**** Skipping non-multiverseable function '%s'\n", fname.c_str());
 #endif
         return 0;
     }
 
 #ifdef DEBUG
-	fprintf(stderr, "\n******** Searching multiverse variables in '%s'\n", fname.c_str());
+    fprintf(stderr, "************************************************************\n");
+	fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
 #endif
 
     std::set<tree> mv_vars;
+    std::set<tree> mv_blacklist;
 	basic_block bb;
-    // iterate of each basic block in current function
+    /* Iterate of each basic block in current function. */
 	FOR_EACH_BB_FN(bb, cfun) {
-        // iterate over each GIMPLE statement
+        /* Iterate over each GIMPLE statement. */
         gimple_stmt_iterator gsi;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple stmt = gsi_stmt(gsi);
@@ -311,16 +313,20 @@ static unsigned int find_mv_vars_execute()
                 continue;
             }
 
-            // if left hand side is a multiverse var skip the function
+            /*
+             * If left hand side is a multiverse var, then don't use it for
+             * multiversing the current function.
+             */
             tree lhs = gimple_assign_lhs(stmt);
             if (is_multiverse_var(lhs)) {
 #ifdef DEBUG
                 fprintf(stderr, "...skipping function: assign to multiverse variable\n");
 #endif
-                return 0;
+                mv_blacklist.insert(lhs);
+                continue;
             }
 
-            // check if any operand is a multiverse variable
+            /* Check if any operand is a multiverse variable */
             for (int num = 1; num < gimple_num_ops(stmt); num++) {
                 tree var = gimple_op(stmt, num);
 
@@ -340,15 +346,22 @@ static unsigned int find_mv_vars_execute()
     fprintf(stderr, "...found '%d' multiverse variables\n", mv_vars.size());
 #endif
     std::set<tree>::iterator varit;
-    for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
-        tree var = *varit;
+    for (varit = mv_blacklist.begin(); varit != mv_blacklist.end(); varit++) {
 #ifdef DEBUG
-        fprintf(stderr, "...replace and constify: ");
-        print_generic_stmt(stderr, var, 0);
+            fprintf(stderr, "...removing blacklisted variable: ");
+            print_generic_stmt(stderr, *varit, 0);
 #endif
-        multiverse_function(var);
+        mv_vars.erase(*varit);
     }
 
+    for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
+        multiverse_function(*varit);
+    }
+
+
+#ifdef DEBUG
+    fprintf(stderr, "************************************************************\n\n");
+#endif
     return 0;
 }
 
