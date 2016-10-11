@@ -27,6 +27,7 @@ int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "10.2016" };
 
+static unsigned int find_mv_vars_execute();
 
 /*
  * Handler for multiverse attributing.  Currently it's only used for debugging
@@ -129,15 +130,6 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
     // Not sure if we need to copy the attributes list: better safe than sorry
     DECL_ATTRIBUTES(new_decl) = copy_list(DECL_ATTRIBUTES(fndecl));
 
-    // Change builtin function code
-    if (DECL_BUILT_IN(new_decl)) {
-        gcc_assert(DECL_BUILT_IN_CLASS(new_decl) == BUILT_IN_NORMAL);
-        gcc_assert(DECL_FUNCTION_CODE(new_decl) < BEGIN_CHKP_BUILTINS);
-        DECL_FUNCTION_CODE(new_decl) = (enum built_in_function)
-                                       (DECL_FUNCTION_CODE(new_decl)
-                                       + BEGIN_CHKP_BUILTINS + 1);
-    }
-
     DECL_FUNCTION_CODE(new_decl);
 
     node = get_fn_cnode(fndecl);
@@ -149,7 +141,7 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
     clone->alias = node->alias;
     clone->weakref = node->weakref;
     clone->cpp_implicit_alias = node->cpp_implicit_alias;
-    clone->orig_decl = fndecl;
+//    clone->orig_decl = fndecl;
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
@@ -162,17 +154,6 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
 #endif
 
     return new_decl;
-}
-
-
-/*
- * Push func the function stack.  That's required to alter the GIMPLE
- * statements in other functions than cfun.
- */
-static inline void set_func(function *func)
-{
-    pop_cfun();
-    push_cfun(func);
 }
 
 
@@ -227,43 +208,51 @@ static void multiverse_function(tree var)
     tree fndecl = cfun->decl;
     tree clone;
     function * old_func = cfun;
-    function * func;
+    function * clone_true, * clone_false;
 
 #ifdef DEBUG
     const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
 #endif
 
+    std::string varname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
+
+    old_func = cfun;
+    pop_cfun();
+
     // case TRUE
-    clone = clone_fndecl(fndecl, "_true");
+    clone = clone_fndecl(fndecl, "_" + varname + "_true");
     gcc_assert(clone != fndecl);
-    func = DECL_STRUCT_FUNCTION(clone);
-    set_func(func);
+    clone_true = DECL_STRUCT_FUNCTION(clone);
+    push_cfun(clone_true);
     replace_and_constify(var, true);
+//    find_mv_vars_execute();  // TODO: it would be nicer if the function would just be checked by our pass
+    pop_cfun();
 
     // case FALSE
-    clone = clone_fndecl(fndecl, "_false");
+    clone = clone_fndecl(fndecl, "_" + varname + "_false");
     gcc_assert(clone != fndecl);
-    func = DECL_STRUCT_FUNCTION(clone);
-    set_func(func);
+    clone_false = DECL_STRUCT_FUNCTION(clone);
+    push_cfun(clone_false);
     replace_and_constify(var, false);
+//    find_mv_vars_execute();  // TODO: it would be nicer if the function would just be checked by our pass
+    pop_cfun();
 
-    set_func(old_func);
+
+//    push_cfun(old_func);
+    push_cfun(old_func);
     return;
 }
 
 
 /*
- * Return true if fndecl is cloneable (i.e., not main and not multiversed).
+ * Return true if fndecl is cloneable (i.e., not main).
  */
 bool is_cloneable_function(tree fndecl)
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
 
     if (fname.compare("main") == 0)
-        return false;
-
-    if (fname.find(MV_SUFFIX, 0) != std::string::npos)
         return false;
 
     return true;
@@ -279,17 +268,19 @@ static unsigned int find_mv_vars_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
-    if (!is_cloneable_function(cfun->decl)) {
-#ifdef DEBUG
-        fprintf(stderr, "**** Skipping non-multiverseable function '%s'\n", fname.c_str());
-#endif
-        return 0;
-    }
-
 #ifdef DEBUG
     fprintf(stderr, "************************************************************\n");
 	fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
 #endif
+
+    if (!is_cloneable_function(cfun->decl)) {
+#ifdef DEBUG
+        fprintf(stderr, ".... skipping, it's not multiverseable\n");
+        fprintf(stderr, "************************************************************\n\n");
+#endif
+        return 0;
+    }
+
 
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;

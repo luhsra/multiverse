@@ -2,37 +2,46 @@
 
 typedef enum { false, true } bool;
 
-__attribute__((multiverse)) bool configA = true;
+__attribute__((multiverse)) bool configA;
+__attribute__((multiverse)) bool configB;
 
 //__attribute__((multiverse)) int * break_it;
 
 
 int foo()
 {
-    int res;
-
     if (configA) {
         printf("configA = true\n");
-        res = 1;
     } else {
         printf("configA = false\n");
-        res = 0;
     }
 
-    bool * pointer = &configA;
-    if (*pointer)
-        printf("POINTER\n");
-
-    return res;
+    return 42;
 }
 
-void lvalue_func()
-{
-    if (configA)
-        foo();
 
-    configA = 0x42;
-}
+//void lvalue_func()
+//{
+//    if (configA)
+//        foo();
+//
+//    configA = false;
+//}
+//
+//
+//void two_references()
+//{
+//    if (configA) {
+//        printf("configA = true\n");
+//    }
+//
+//    if (configB) {
+//        printf("configB = true\n");
+//    }
+//
+//    printf("two multiverse variables\n");
+//
+//}
 
 
 int main(int argc, char **argv)
@@ -47,7 +56,7 @@ int main(int argc, char **argv)
         a= 3;
     }
 
-    lvalue_func();
+//    lvalue_func();
 
     return 0;
 }
