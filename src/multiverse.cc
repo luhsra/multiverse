@@ -13,7 +13,7 @@
  * [1] Kernel Newbies wiki
  *     https://kernelnewbies.org/KernelProjects/compiler-multiverse
  *
- * [2] "Function Multiverses for Dynamic Variability"
+ * [2] Function Multiverses for Dynamic Variability
  *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
  */
 
@@ -141,7 +141,6 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
     clone->alias = node->alias;
     clone->weakref = node->weakref;
     clone->cpp_implicit_alias = node->cpp_implicit_alias;
-//    clone->orig_decl = fndecl;
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
@@ -226,7 +225,6 @@ static void multiverse_function(tree var)
     clone_true = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_true);
     replace_and_constify(var, true);
-//    find_mv_vars_execute();  // TODO: it would be nicer if the function would just be checked by our pass
     pop_cfun();
 
     // case FALSE
@@ -235,11 +233,9 @@ static void multiverse_function(tree var)
     clone_false = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_false);
     replace_and_constify(var, false);
-//    find_mv_vars_execute();  // TODO: it would be nicer if the function would just be checked by our pass
     pop_cfun();
 
 
-//    push_cfun(old_func);
     push_cfun(old_func);
     return;
 }
@@ -267,9 +263,9 @@ bool is_cloneable_function(tree fndecl)
 static unsigned int find_mv_vars_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
-
 #ifdef DEBUG
     fprintf(stderr, "************************************************************\n");
+    print_current_pass(stderr);
 	fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
 #endif
 
