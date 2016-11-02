@@ -164,7 +164,7 @@ static void replace_and_constify(tree old_var, const int value)
     tree new_var = build_int_cst(TREE_TYPE(old_var), value);
 
     basic_block bb;
-	FOR_EACH_BB_FN(bb, cfun) {
+    FOR_EACH_BB_FN(bb, cfun) {
         // iterate over each GIMPLE statement
         gimple_stmt_iterator gsi;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
@@ -176,9 +176,9 @@ static void replace_and_constify(tree old_var, const int value)
 #endif
 
             if (!is_gimple_assign(stmt)) {
-                #ifdef DEBUG
+#ifdef DEBUG
                 fprintf(stderr, "...skipping non-assign statement\n");
-                #endif
+#endif
                 continue;
             }
 
@@ -266,7 +266,7 @@ static unsigned int find_mv_vars_execute()
 #ifdef DEBUG
     fprintf(stderr, "************************************************************\n");
     print_current_pass(stderr);
-	fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
+    fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
 #endif
 
     if (!is_cloneable_function(cfun->decl)) {
@@ -280,9 +280,9 @@ static unsigned int find_mv_vars_execute()
 
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;
-	basic_block bb;
+    basic_block bb;
     /* Iterate of each basic block in current function. */
-	FOR_EACH_BB_FN(bb, cfun) {
+    FOR_EACH_BB_FN(bb, cfun) {
         /* Iterate over each GIMPLE statement. */
         gimple_stmt_iterator gsi;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
@@ -335,8 +335,8 @@ static unsigned int find_mv_vars_execute()
     std::set<tree>::iterator varit;
     for (varit = mv_blacklist.begin(); varit != mv_blacklist.end(); varit++) {
 #ifdef DEBUG
-            fprintf(stderr, "...removing blacklisted variable: ");
-            print_generic_stmt(stderr, *varit, 0);
+        fprintf(stderr, "...removing blacklisted variable: ");
+        print_generic_stmt(stderr, *varit, 0);
 #endif
         mv_vars.erase(*varit);
     }
