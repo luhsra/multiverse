@@ -18,16 +18,38 @@
  */
 
 #include "gcc-common.h"
+
+#include "tree-iterator.h"
+
 #include <set>
 #include <string>
 
 #define MV_SUFFIX ".multiverse"
+#define MV_VERSION 42
 
 int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "10.2016" };
 
+/* These record types are used to pass on the information about the
+   multiverses instanciated in this compilation unit. */
+typedef struct  {
+    tree info_type, info_ptr_type;
+    tree fn_type, fn_ptr_type;
+    tree var_type, var_ptr_type;
+    tree mvfn_type, mvfn_ptr_type;
+    tree var_assign_type, var_assign_ptr_type;
+} mv_info_ctx_t;
+
+static mv_info_ctx_t mv_info_ctx;
+
 static unsigned int find_mv_vars_execute();
+
+#ifdef DEBUG
+#define debug_print(args...) fprintf(stderr, args)
+#else
+#define debug_print(args...) do {} while(0)
+#endif
 
 /*
  * Handler for multiverse attributing.  Currently it's only used for debugging
@@ -197,6 +219,341 @@ static void replace_and_constify(tree old_var, const int value)
     }
 }
 
+static tree
+get_mv_unsigned_t (void)
+{
+    machine_mode mode = smallest_mode_for_size (32, MODE_INT);
+    return lang_hooks.types.type_for_mode (mode, true);
+}
+
+
+#define RECORD_FIELD(type) \
+    field = build_decl (BUILTINS_LOCATION, FIELD_DECL, NULL_TREE, \
+                        (type)); \
+    DECL_CHAIN(field) = fields; \
+    fields = field;
+
+static void
+build_info_type(tree info_type,
+                tree info_var_ptr_type,
+                tree info_fn_ptr_type)
+{
+    /*  struct __mv_info {
+          unsigned int version;
+
+          struct mv_info *next;
+
+          unsigned int n_variables;
+          struct mv_info_var **variables;
+
+          unsigned int n_functions;
+          struct mv_info_fn ** functions;
+        };
+    */
+
+    tree field, fields = NULL_TREE;
+
+    /* Version ident */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* next pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (info_type, TYPE_QUAL_CONST)));
+
+    /* n_vars */
+    RECORD_FIELD(get_mv_unsigned_t ());
+
+    /* struct mv_info_var pointer pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                info_var_ptr_type, TYPE_QUAL_CONST)));
+
+    /* n_functions */
+    RECORD_FIELD(get_mv_unsigned_t ());
+
+    /* struct mv_info_fn pointer pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                info_fn_ptr_type, TYPE_QUAL_CONST)));
+
+    finish_builtin_struct (info_type, "__mv_info", fields, NULL_TREE);
+}
+
+static void
+build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
+{
+    /*
+      struct __mv_info_fn {
+        char * const const name;
+        void * original_function;
+
+        unsigned int n_mv_functions;
+        struct mv_info_mvfn ** mv_functions;
+      };
+    */
+
+    tree field, fields = NULL_TREE;
+
+    /* Name of function */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                char_type_node, TYPE_QUAL_CONST)));
+
+    /* Pointer to original function body */
+    RECORD_FIELD(
+        build_pointer_type (void_type_node));
+
+    /* n_mv_functions */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* mv_functions pointer pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                info_mvfn_ptr_type, TYPE_QUAL_CONST)));
+
+    finish_builtin_struct (info_fn_type, "__mv_info_fn", fields, NULL_TREE);
+}
+
+
+static void
+build_info_var_type(tree info_var_type, tree info_mvfn_ptr_type)
+{
+    /*
+      struct __mv_info_var {
+        char * const name;
+
+        void * variable;
+        unsigned char width;
+
+        int materialized_value;
+
+        unsigned int n_mv_functions;
+        struct mv_info_mvfn ** mv_functions;
+      };
+    */
+    tree field, fields = NULL_TREE;
+
+    /* Name of variable */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                char_type_node, TYPE_QUAL_CONST)));
+
+    /* Pointer to variable */
+    RECORD_FIELD(
+        build_pointer_type (void_type_node));
+
+    /* width */
+    RECORD_FIELD(unsigned_char_type_node);
+
+    /* materialized value */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* n_mv_functions */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* mv_functions pointer pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+            build_qualified_type (
+                info_mvfn_ptr_type, TYPE_QUAL_CONST)));
+
+    finish_builtin_struct (info_var_type, "__mv_info_var", fields, NULL_TREE);
+}
+
+
+static void
+build_info_mvfn_type(tree info_mvfn_type,
+                     tree info_fn_type, tree info_var_assign_ptr_type)
+{
+
+    /*
+      struct __mv_info_mvfn {
+        struct mv_info_fn * const function;
+        void * mv_function;
+
+        unsigned int n_assignments;
+        struct mv_info_var_assign ** assignments;
+      };
+    */
+    tree field, fields = NULL_TREE;
+
+    /* For what function is this mvfn a multiverse member? */
+    RECORD_FIELD(
+        build_qualified_type (
+             info_fn_type, TYPE_QUAL_CONST));
+
+    /* Pointer to function body */
+    RECORD_FIELD(build_pointer_type (void_type_node));
+
+    /* n_assignments */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    // FIXME
+    /* mv_assignments pointer pointer */
+    RECORD_FIELD(
+        build_pointer_type (
+           build_qualified_type (
+                  info_var_assign_ptr_type, TYPE_QUAL_CONST)));
+
+    finish_builtin_struct (info_mvfn_type, "__mv_info_mvfn", fields, NULL_TREE);
+}
+
+
+static void
+build_info_var_assign_type(tree info_var_assign_type,
+                           tree info_var_ptr_type)
+{
+
+    /*
+      struct __mv_info_var_assign {
+        struct mv_info_var * variable;
+        int lower_bound;
+        int upper_bound;
+      };
+    */
+
+    tree field, fields = NULL_TREE;
+
+    /* Name of variable */
+    RECORD_FIELD(info_var_ptr_type);
+
+    /* lower limit */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* upper limit */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    finish_builtin_struct (info_var_assign_type, "__mv_info_var_assign", fields, NULL_TREE);
+}
+
+#undef RECORD_FIELD
+
+static void
+build_types(mv_info_ctx_t *t) {
+    t->info_type = lang_hooks.types.make_type (RECORD_TYPE);
+    t->fn_type = lang_hooks.types.make_type (RECORD_TYPE);
+    t->var_type = lang_hooks.types.make_type (RECORD_TYPE);
+    t->mvfn_type = lang_hooks.types.make_type (RECORD_TYPE);
+    t->var_assign_type = lang_hooks.types.make_type (RECORD_TYPE);
+
+    t->info_ptr_type = build_pointer_type(t->info_type);
+    t->fn_ptr_type = build_pointer_type(t->fn_type);
+    t->var_ptr_type = build_pointer_type(t->var_type);
+    t->mvfn_ptr_type = build_pointer_type(t->mvfn_type);
+    t->var_assign_ptr_type = build_pointer_type(t->var_assign_type);
+
+    build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type);
+    build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
+    build_info_var_type(t->var_type, t->mvfn_ptr_type);
+    build_info_mvfn_type(t->mvfn_type,
+                         t->fn_ptr_type,
+                         t->var_assign_ptr_type);
+    build_info_var_assign_type(t->var_assign_type,
+                         t->var_ptr_type);
+}
+
+/* Generate the constructor function to call __gcov_init.  */
+
+static void
+build_init_ctor (tree mv_info_ptr_type, tree mv_info_var)
+{
+    tree ctor, stmt, init_fn;
+
+    /* Build a decl for __gcov_init.  */
+    init_fn = build_function_type_list (void_type_node, mv_info_ptr_type, NULL);
+    init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
+                          get_identifier ("__multiverse_init"), init_fn);
+    TREE_PUBLIC (init_fn) = 1;
+    DECL_EXTERNAL (init_fn) = 1;
+    DECL_ASSEMBLER_NAME (init_fn);
+
+    /* Generate a call to __gcov_init(&gcov_info).  */
+    ctor = NULL;
+    stmt = build_fold_addr_expr (mv_info_var);
+    stmt = build_call_expr (init_fn, 1, stmt);
+    append_to_statement_list (stmt, &ctor);
+
+    /* Generate a constructor to run it.  */
+    cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
+}
+
+
+
+static bool mv_info_init_done = false;
+static void mv_info_init(void *event_data, void *data)
+{
+    if (!mv_info_init_done) {
+        mv_info_init_done = true;
+        debug_print("Initialize record types\n");
+        build_types((mv_info_ctx_t *) data);
+    }
+}
+
+static bool mv_info_finish_done = false;
+static void mv_info_finish(void *event_data, void *data)
+{
+    if (mv_info_finish_done) {
+        return;
+    }
+    mv_info_finish_done = true;
+
+    mv_info_ctx_t *ctx = (mv_info_ctx_t *) data;
+    char name_buf[32];
+
+    /* Create the constructor for the top-level mv_info object */
+    vec<constructor_elt, va_gc> *obj = NULL;
+    tree info_fields = TYPE_FIELDS (ctx->info_type);
+
+    /* Version ident */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), MV_VERSION));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* next -- NULL */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* n_functions */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), 0));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* functions -- NULL */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* n_variables */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), 0));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* variables -- NULL */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    gcc_assert (!info_fields); // All fields are filled
+
+    tree ctor = build_constructor (ctx->info_type, obj);
+
+    /* And Initialize a variable with it */
+    tree mv_info_var = build_decl (BUILTINS_LOCATION, VAR_DECL, NULL_TREE,
+                                    ctx->info_type);
+    ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 0);
+    DECL_NAME (mv_info_var) = get_identifier (name_buf);
+    TREE_STATIC (mv_info_var) = 1;
+    DECL_INITIAL (mv_info_var) = ctor;
+
+    varpool_node::finalize_decl (mv_info_var);
+
+    build_init_ctor(ctx->info_ptr_type, mv_info_var);
+}
+
 
 /*
  * TODO: this function may change as soon as we've figured out how to deal with
@@ -209,12 +566,12 @@ static void multiverse_function(tree var)
     function * old_func = cfun;
     function * clone_true, * clone_false;
 
-#ifdef DEBUG
-    const char * fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    fprintf(stderr, "---- Generating function clones for '%s'\n", fname);
-#endif
-
+    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     std::string varname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
+
+#ifdef DEBUG
+    fprintf(stderr, "---- Generating function clones for '%s'\n", fname.c_str());
+#endif
 
     old_func = cfun;
     pop_cfun();
@@ -237,6 +594,11 @@ static void multiverse_function(tree var)
 
 
     push_cfun(old_func);
+
+    /* Create Information about the multiversed function */
+
+
+
     return;
 }
 
@@ -374,11 +736,17 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
         return 1;
     }
 
+    // Initialize types and the multiverse info structures.
+    register_callback(plugin_name, PLUGIN_EARLY_GIMPLE_PASSES_START,
+                      mv_info_init, &mv_info_ctx);
+
+
     // register plugin information
     register_callback(plugin_name, PLUGIN_INFO, NULL, &mv_plugin_info);
 
     // register the multiverse attribute
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
+
 
     // register the multiverse GIMPLE pass
     find_mv_vars_info.pass = make_find_mv_vars_pass();
@@ -386,6 +754,10 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     find_mv_vars_info.ref_pass_instance_number = 0;
     find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
+
+    // Finish off the generation of multiverse info
+    register_callback(plugin_name, PLUGIN_EARLY_GIMPLE_PASSES_END,
+                      mv_info_finish, &mv_info_ctx);
 
     return 0;
 }

@@ -10,7 +10,9 @@ PLUGIN= multiverse
 GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
 CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti
 
-all: $(PLUGIN).cc
+all: $(PLUGIN).so
+
+$(PLUGIN).so: $(PLUGIN).cc
 	$(HOST_GCC) -shared $(CXXFLAGS) $(PLUGIN).cc -o $(PLUGIN).so
 
 clean:
@@ -24,9 +26,13 @@ debug: all
 
 test: test_1
 
-test_1: debug
+test_1: debug libmultiverse
 	rm -f test_1 test_1.c.*
-	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized $(CFLAGS)
-	less test_1.c.211t.optimized
+	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized $(CFLAGS) \
+	   -L../libmultiverse -lmultiverse
+	# less test_1.c.211t.optimized
+
+libmultiverse:
+	$(MAKE) -C ../libmultiverse
 
 .PHONY= all clean debug test
