@@ -23,6 +23,8 @@
 
 #include <set>
 #include <string>
+#include <list>
+#include <sstream>
 
 #define MV_SUFFIX ".multiverse"
 #define MV_VERSION 42
@@ -31,15 +33,24 @@ int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "10.2016" };
 
+struct mv_info_fn_data {
+    tree fn_decl;			 /* the function decl */
+};
+
 /* These record types are used to pass on the information about the
    multiverses instanciated in this compilation unit. */
 typedef struct  {
+    // data types
     tree info_type, info_ptr_type;
     tree fn_type, fn_ptr_type;
     tree var_type, var_ptr_type;
     tree mvfn_type, mvfn_ptr_type;
     tree var_assign_type, var_assign_ptr_type;
+
+    // information
+    std::list<mv_info_fn_data> fn_data;
 } mv_info_ctx_t;
+
 
 static mv_info_ctx_t mv_info_ctx;
 
@@ -226,6 +237,49 @@ get_mv_unsigned_t (void)
     return lang_hooks.types.type_for_mode (mode, true);
 }
 
+/* Build a coverage variable of TYPE for function FN_DECL.  If COUNTER
+   >= 0 it is a counter array, otherwise it is the function structure.  */
+
+static tree
+build_var (tree type, std::string prefix)
+{
+    tree var = build_decl (BUILTINS_LOCATION, VAR_DECL, NULL_TREE, type);
+    static int counter = 0;
+    std::stringstream ss;
+    ss << prefix << counter ++;
+    std::string name = ss.str();
+
+    DECL_NAME (var) = get_identifier (name.c_str());
+    TREE_STATIC (var) = 1;
+    TREE_ADDRESSABLE (var) = 1;
+    DECL_NONALIASED (var) = 1;
+    DECL_ALIGN (var) = TYPE_ALIGN (type);
+
+    return var;
+}
+
+
+template<typename T>
+tree build_array_from_list(std::list<T> elements, tree type_ptr,
+                           tree (*build_obj_ptr)(T, mv_info_ctx_t*),
+                           mv_info_ctx_t *ctx) {
+
+    vec<constructor_elt, va_gc> *ary_ctor = NULL;
+    for (const auto &data : elements) {
+        tree obj = build_obj_ptr(data, ctx);
+        CONSTRUCTOR_APPEND_ELT (ary_ctor, NULL,
+                                build1 (ADDR_EXPR, type_ptr, obj));
+
+    }
+    tree ary_type = build_array_type
+        (build_qualified_type (type_ptr, TYPE_QUAL_CONST),
+         build_index_type (size_int (elements.size())));
+    tree ary = build_var(ary_type, "__mv_ary_");
+    DECL_INITIAL (ary) = build_constructor (ary_type, ary_ctor);
+    varpool_node::finalize_decl (ary);
+
+    return ary;
+}
 
 #define RECORD_FIELD(type) \
     field = build_decl (BUILTINS_LOCATION, FIELD_DECL, NULL_TREE, \
@@ -317,6 +371,53 @@ build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
                 info_mvfn_ptr_type, TYPE_QUAL_CONST)));
 
     finish_builtin_struct (info_fn_type, "__mv_info_fn", fields, NULL_TREE);
+}
+
+tree build_info_fn(mv_info_fn_data fn_info, mv_info_ctx_t *ctx) {
+    char name_buf[32];
+
+    /* Create the constructor for the top-level mv_info object */
+    vec<constructor_elt, va_gc> *obj = NULL;
+    tree info_fields = TYPE_FIELDS (ctx->fn_type);
+
+    /* Name of function */
+    const char *fn_name = IDENTIFIER_POINTER (
+                              DECL_ASSEMBLER_NAME (fn_info.fn_decl));
+    size_t fn_name_len = strlen (fn_name);
+    tree fn_string = build_string (fn_name_len + 1, fn_name);
+    TREE_TYPE (fn_string) = build_array_type
+        (char_type_node, build_index_type (size_int (fn_name_len)));
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1 (ADDR_EXPR, TREE_TYPE (info_fields),
+                                    fn_string));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* Function pointer */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1(ADDR_EXPR,
+                                   build_pointer_type(void_type_node),
+                                   fn_info.fn_decl));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* n_mv_functions */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), 0));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* mv_functions -- NULL */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    gcc_assert (!info_fields); // All fields are filled
+
+    tree ctor = build_constructor (ctx->fn_type, obj);
+
+    /* And Initialize a variable with it */
+    tree fn_var = build_var(ctx->fn_type, "__mv_info_fn_");
+    DECL_INITIAL (fn_var) = ctor;
+    varpool_node::finalize_decl (fn_var);
+
+    return fn_var;
 }
 
 
@@ -488,20 +589,15 @@ build_init_ctor (tree mv_info_ptr_type, tree mv_info_var)
 static bool mv_info_init_done = false;
 static void mv_info_init(void *event_data, void *data)
 {
-    if (!mv_info_init_done) {
-        mv_info_init_done = true;
-        debug_print("Initialize record types\n");
-        build_types((mv_info_ctx_t *) data);
-    }
+    debug_print("mv: start mv_info\n");
+    build_types((mv_info_ctx_t *) data);
 }
+
 
 static bool mv_info_finish_done = false;
 static void mv_info_finish(void *event_data, void *data)
 {
-    if (mv_info_finish_done) {
-        return;
-    }
-    mv_info_finish_done = true;
+    debug_print("mv: finish mv_info\n");
 
     mv_info_ctx_t *ctx = (mv_info_ctx_t *) data;
     char name_buf[32];
@@ -519,15 +615,6 @@ static void mv_info_finish(void *event_data, void *data)
     CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
     info_fields = DECL_CHAIN (info_fields);
 
-    /* n_functions */
-    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
-                            build_int_cstu (TREE_TYPE (info_fields), 0));
-    info_fields = DECL_CHAIN (info_fields);
-
-    /* functions -- NULL */
-    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
-    info_fields = DECL_CHAIN (info_fields);
-
     /* n_variables */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields,
                             build_int_cstu (TREE_TYPE (info_fields), 0));
@@ -535,6 +622,19 @@ static void mv_info_finish(void *event_data, void *data)
 
     /* variables -- NULL */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* n_functions */
+    unsigned n_functions = ctx->fn_data.size();
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields),
+                                            n_functions));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* functions -- NULL */
+    tree fn_ary = build_array_from_list(ctx->fn_data, ctx->fn_ptr_type, build_info_fn, ctx);
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1 (ADDR_EXPR, ctx->fn_ptr_type, fn_ary));
     info_fields = DECL_CHAIN (info_fields);
 
     gcc_assert (!info_fields); // All fields are filled
@@ -551,6 +651,7 @@ static void mv_info_finish(void *event_data, void *data)
 
     varpool_node::finalize_decl (mv_info_var);
 
+    // Vall __multiverse_init() on program startup
     build_init_ctor(ctx->info_ptr_type, mv_info_var);
 }
 
@@ -703,8 +804,14 @@ static unsigned int find_mv_vars_execute()
         mv_vars.erase(*varit);
     }
 
-    for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
-        multiverse_function(*varit);
+    /* This functions is multiversed */
+    if (mv_vars.begin() != mv_vars.end()) {
+        mv_info_fn_data fn_data;
+        fn_data.fn_decl = cfun->decl;
+        for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
+            multiverse_function(*varit);
+        }
+        mv_info_ctx.fn_data.push_back(fn_data);
     }
 
 
@@ -737,7 +844,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     }
 
     // Initialize types and the multiverse info structures.
-    register_callback(plugin_name, PLUGIN_EARLY_GIMPLE_PASSES_START,
+    register_callback(plugin_name, PLUGIN_START_UNIT,
                       mv_info_init, &mv_info_ctx);
 
 
@@ -756,7 +863,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
 
     // Finish off the generation of multiverse info
-    register_callback(plugin_name, PLUGIN_EARLY_GIMPLE_PASSES_END,
+    register_callback(plugin_name, PLUGIN_FINISH_UNIT,
                       mv_info_finish, &mv_info_ctx);
 
     return 0;
