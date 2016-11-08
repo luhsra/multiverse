@@ -3,7 +3,7 @@ struct mv_info_mvfn;
 struct mv_info_fn;
 struct mv_info;
 
-struct mv_info_var_assign {
+struct mv_info_assignment {
     struct mv_info_var * variable;
     int lower_bound;
     int upper_bound;
@@ -14,7 +14,7 @@ struct mv_info_mvfn {
 
     void * mv_function;
     unsigned int n_assignments;
-    struct mv_info_var_assign ** assignments;
+    struct mv_info_assignment * assignments;
 };
 
 struct mv_info_fn {
