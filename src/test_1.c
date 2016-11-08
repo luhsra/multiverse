@@ -4,6 +4,8 @@ typedef enum { false, true } bool;
 
 __attribute__((multiverse)) bool configA;
 __attribute__((multiverse)) bool configB;
+extern __attribute__((multiverse)) bool configC;
+
 
 //__attribute__((multiverse)) int * break_it;
 
@@ -46,7 +48,7 @@ int foo()
 
 int main(int argc, char **argv)
 {
-    printf("Hello multiverse!\n");
+    printf("Hello multiverse! %d\n", sizeof(configA));
 
     foo();
 

@@ -50,8 +50,10 @@ struct mv_info_mvfn_data {
 struct mv_info_fn_data {
     tree fn_decl;			 /* the function decl */
     std::list<mv_info_mvfn_data> mv_functions;
+};
 
-    tree obj; // materialized object, initialized in build_fn_info
+struct mv_info_var_data {
+    tree var_decl;			 /* the multiverse variable decl */
 };
 
 /* These record types are used to pass on the information about the
@@ -65,6 +67,7 @@ typedef struct  {
     tree assignment_type, assignment_ptr_type;
 
     // information
+    std::list<mv_info_var_data> variables;
     std::list<mv_info_fn_data> functions;
 } mv_info_ctx_t;
 
@@ -91,6 +94,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 {
 #ifdef DEBUG
     fprintf(stderr, "---- attributing MULTIVERSE variable ");
+    fprintf(stderr, "(extern = %d) ", DECL_EXTERNAL(*node));
     print_generic_stmt(stderr, *node, 0);
 #endif
 
@@ -98,6 +102,15 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
     if (type != INTEGER_TYPE && type != ENUMERAL_TYPE)
         error("variable %qD with %qE attribute must be an integer "
               "or enumeral type", *node, name);
+
+
+    // FIXME: Error on weak attributed variables?
+
+    if (!DECL_EXTERNAL(*node)) { // Defined in this compilation unit.
+        mv_info_var_data mv_variable;
+        mv_variable.var_decl = *node;
+        mv_info_ctx.variables.push_back(mv_variable);
+    }
 
     return NULL_TREE;
 }
@@ -385,11 +398,10 @@ build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
     /* n_mv_functions */
     RECORD_FIELD(get_mv_unsigned_t());
 
-    /* mv_functions pointer pointer */
+    /* mv_functions pointer */
     RECORD_FIELD(
-        build_pointer_type (
-            build_qualified_type (
-                info_mvfn_ptr_type, TYPE_QUAL_CONST)));
+         build_qualified_type (
+             info_mvfn_ptr_type, TYPE_QUAL_CONST));
 
     finish_builtin_struct (info_fn_type, "__mv_info_fn", fields, NULL_TREE);
 }
@@ -398,7 +410,6 @@ tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx) {
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
     tree fn_var = build_var(ctx->fn_type, "__mv_info_fn_");
-    fn_info.obj = fn_var;
     tree info_fields = TYPE_FIELDS (ctx->fn_type);
 
     /* Name of function */
@@ -480,27 +491,75 @@ build_info_var_type(tree info_var_type, tree info_mvfn_ptr_type)
     /* materialized value */
     RECORD_FIELD(get_mv_unsigned_t());
 
-    /* n_mv_functions */
+    /* n_functions */
     RECORD_FIELD(get_mv_unsigned_t());
 
-    /* mv_functions pointer pointer */
+    /* functions pointer */
     RECORD_FIELD(
-        build_pointer_type (
             build_qualified_type (
-                info_mvfn_ptr_type, TYPE_QUAL_CONST)));
+                info_mvfn_ptr_type, TYPE_QUAL_CONST));
 
     finish_builtin_struct (info_var_type, "__mv_info_var", fields, NULL_TREE);
 }
 
 
+static tree
+build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx) {
+    vec<constructor_elt, va_gc> *obj = NULL;
+    tree info_fields = TYPE_FIELDS (ctx->var_type);
+
+    /* name of variable */
+    const char *var_name =
+        IDENTIFIER_POINTER ( DECL_ASSEMBLER_NAME (var_info.var_decl));
+    size_t var_name_len = strlen (var_name);
+    tree var_string = build_string (var_name_len + 1, var_name);
+    TREE_TYPE (var_string) = build_array_type
+        (char_type_node, build_index_type (size_int (var_name_len)));
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1 (ADDR_EXPR, TREE_TYPE (info_fields),
+                                    var_string));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* Pointer to variable as a (void *) */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1(ADDR_EXPR,
+                                   build_pointer_type(void_type_node),
+                                   var_info.var_decl));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* width of referenced varibale */
+    int width = int_size_in_bytes(TREE_TYPE(var_info.var_decl));
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields),
+                                            width));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* materializd value -- Filled by Runtime System */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), 0));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* n_functions -- Filled by Runtime System */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build_int_cstu (TREE_TYPE (info_fields), 0));
+    info_fields = DECL_CHAIN (info_fields);
+
+    /* functions -- Filled by Runtime System */
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN (info_fields);
+
+    gcc_assert (!info_fields); // All fields are filled
+
+    return build_constructor (ctx->var_type, obj);
+}
+
+
 static void
-build_info_mvfn_type(tree info_mvfn_type,
-                     tree info_fn_type, tree info_assignment_ptr_type)
+build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_type)
 {
 
     /*
       struct __mv_info_mvfn {
-        struct mv_info_fn * const function;
         void * mv_function;
 
         unsigned int n_assignments;
@@ -508,11 +567,6 @@ build_info_mvfn_type(tree info_mvfn_type,
       };
     */
     tree field, fields = NULL_TREE;
-
-    /* For what function is this mvfn a multiverse member? */
-    RECORD_FIELD(
-        build_qualified_type (
-             info_fn_type, TYPE_QUAL_CONST));
 
     /* Pointer to function body */
     RECORD_FIELD(build_pointer_type (void_type_node));
@@ -530,15 +584,7 @@ build_info_mvfn_type(tree info_mvfn_type,
 
 tree build_info_mvfn(mv_info_mvfn_data &mvfn_info, mv_info_ctx_t *ctx) {
     vec<constructor_elt, va_gc> *obj = NULL;
-    tree mvfn_var = build_var(ctx->mvfn_type, "__mv_info_mvfn_");
     tree info_fields = TYPE_FIELDS (ctx->mvfn_type);
-
-    /* Pointer to Parent Function Ptr  as a (void *) */
-    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
-                            build1(ADDR_EXPR,
-                                   ctx->fn_ptr_type,
-                                   mvfn_info.parent_fn_data->obj));
-    info_fields = DECL_CHAIN (info_fields);
 
     /* MV Function pointer  as a (void *) */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields,
@@ -554,7 +600,7 @@ tree build_info_mvfn(mv_info_mvfn_data &mvfn_info, mv_info_ctx_t *ctx) {
                                             n_assigns));
     info_fields = DECL_CHAIN (info_fields);
 
-    /* mv_assignments -- NULL*/
+    /* mv_assignments */
     tree assigns_ary = build_array_from_list(mvfn_info.assignments,
                                              ctx->assignment_type,
                                              build_info_assignment,
@@ -570,12 +616,7 @@ tree build_info_mvfn(mv_info_mvfn_data &mvfn_info, mv_info_ctx_t *ctx) {
 
     tree ctor = build_constructor (ctx->mvfn_type, obj);
 
-    /* And Initialize a variable with it */
-    DECL_INITIAL (mvfn_var) = ctor;
-    varpool_node::finalize_decl (mvfn_var);
-
-    // We use an array of pointers for multiverse functions
-    return build1(ADDR_EXPR, ctx->mvfn_ptr_type, mvfn_var);
+    return ctor;
 }
 
 
@@ -594,7 +635,7 @@ build_info_assignment_type(tree info_assignment_type,
 
     tree field, fields = NULL_TREE;
 
-    /* Name of variable */
+    /* Variable this assignment refers to */
     RECORD_FIELD(info_var_ptr_type);
 
     /* lower limit */
@@ -610,7 +651,8 @@ tree build_info_assignment(mv_info_assignment_data &assign_info, mv_info_ctx_t *
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS (ctx->assignment_type);
 
-    /* Pointer to Parent Function Ptr  as a (void *) */
+    /* Pointer to actual variable. This is replaced by the runtime
+       system */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields,
                             build1(ADDR_EXPR,
                                    build_pointer_type(void_type_node),
@@ -655,9 +697,7 @@ build_types(mv_info_ctx_t *t) {
     build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type);
     build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
     build_info_var_type(t->var_type, t->mvfn_ptr_type);
-    build_info_mvfn_type(t->mvfn_type,
-                         t->fn_ptr_type,
-                         t->assignment_ptr_type);
+    build_info_mvfn_type(t->mvfn_type, t->assignment_ptr_type);
     build_info_assignment_type(t->assignment_type,
                                t->var_ptr_type);
 }
@@ -701,9 +741,8 @@ static bool mv_info_finish_done = false;
 static void mv_info_finish(void *event_data, void *data)
 {
     debug_print("mv: finish mv_info\n");
-
     mv_info_ctx_t *ctx = (mv_info_ctx_t *) data;
-    char name_buf[32];
+    tree info_var = build_var(ctx->info_type, "__mv_info_");
 
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
@@ -714,17 +753,21 @@ static void mv_info_finish(void *event_data, void *data)
                             build_int_cstu (TREE_TYPE (info_fields), MV_VERSION));
     info_fields = DECL_CHAIN (info_fields);
 
-    /* next -- NULL */
+    /* next -- NULL; Filled by Runtime System */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
     info_fields = DECL_CHAIN (info_fields);
 
     /* n_variables */
     CONSTRUCTOR_APPEND_ELT (obj, info_fields,
-                            build_int_cstu (TREE_TYPE (info_fields), 0));
+                            build_int_cstu (TREE_TYPE (info_fields),
+                                            ctx->variables.size()));
     info_fields = DECL_CHAIN (info_fields);
 
     /* variables -- NULL */
-    CONSTRUCTOR_APPEND_ELT (obj, info_fields, null_pointer_node);
+    tree var_ary = build_array_from_list(ctx->variables, ctx->var_type,
+                                        build_info_var, ctx);
+    CONSTRUCTOR_APPEND_ELT (obj, info_fields,
+                            build1 (ADDR_EXPR, ctx->var_ptr_type, var_ary));
     info_fields = DECL_CHAIN (info_fields);
 
     /* n_functions */
@@ -746,17 +789,12 @@ static void mv_info_finish(void *event_data, void *data)
     tree ctor = build_constructor (ctx->info_type, obj);
 
     /* And Initialize a variable with it */
-    tree mv_info_var = build_decl (BUILTINS_LOCATION, VAR_DECL, NULL_TREE,
-                                    ctx->info_type);
-    ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 0);
-    DECL_NAME (mv_info_var) = get_identifier (name_buf);
-    TREE_STATIC (mv_info_var) = 1;
-    DECL_INITIAL (mv_info_var) = ctor;
+    DECL_INITIAL (info_var) = ctor;
 
-    varpool_node::finalize_decl (mv_info_var);
+    varpool_node::finalize_decl (info_var);
 
     // Vall __multiverse_init() on program startup
-    build_init_ctor(ctx->info_ptr_type, mv_info_var);
+    build_init_ctor(ctx->info_ptr_type, info_var);
 }
 
 

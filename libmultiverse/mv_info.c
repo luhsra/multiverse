@@ -13,8 +13,9 @@ void __multiverse_init(struct mv_info *info) {
                 fn->original_function,
                 fn->n_mv_functions);
         for (unsigned j = 0; j < fn->n_mv_functions; j++) {
-            struct mv_info_mvfn * mvfn = fn->mv_functions[j];
-            assert(mvfn->function == fn);
+            struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
+            void (* mv_func)() = mvfn->mv_function;
+            mv_func();
             fprintf(stderr, "    %p (vars %d)\n",
                     mvfn->mv_function, mvfn->n_assignments);
             for (unsigned x = 0; x < mvfn->n_assignments; x++) {
@@ -25,5 +26,12 @@ void __multiverse_init(struct mv_info *info) {
             }
 
         }
+    }
+    fprintf(stderr, "%d variables were multiversed\n", info->n_variables);
+    for (unsigned i = 0; i < info->n_variables; ++i) {
+        struct mv_info_var *var = &info->variables[i];
+        fprintf(stderr, "  %s %p (width %d)\n", var->name,
+                var->variable,
+                var->variable_width);
     }
 }

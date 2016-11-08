@@ -10,8 +10,6 @@ struct mv_info_assignment {
 };
 
 struct mv_info_mvfn {
-    struct mv_info_fn *function;
-
     void * mv_function;
     unsigned int n_assignments;
     struct mv_info_assignment * assignments;
@@ -26,15 +24,16 @@ struct mv_info_fn {
 
     /* What variants exist for this function */
     unsigned int n_mv_functions;
-    struct mv_info_mvfn ** mv_functions;
+    struct mv_info_mvfn * mv_functions;
 };
 
 struct mv_info_var {
     char * const name;
     void * variable;
+    unsigned char variable_width;
 
+    // For the use of the runtime system
     int materialized_value;
-
     unsigned int n_mv_functions;
     struct mv_info_mvfn ** mv_functions;
 };
@@ -44,10 +43,10 @@ struct mv_info {
      * version N */
     unsigned int version;
 
-    struct mv_info *next;
+    struct mv_info *next; // Filled by runtime system
 
     unsigned int n_variables;
-    struct mv_info_var **variables;
+    struct mv_info_var *variables;
 
     unsigned int n_functions;
     struct mv_info_fn ** functions;
