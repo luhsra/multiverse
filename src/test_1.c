@@ -31,19 +31,19 @@ int foo()
 //}
 //
 //
-//void two_references()
-//{
-//    if (configA) {
-//        printf("configA = true\n");
-//    }
-//
-//    if (configB) {
-//        printf("configB = true\n");
-//    }
-//
-//    printf("two multiverse variables\n");
-//
-//}
+void two_references()
+{
+    if (configA) {
+        printf("configA = true\n");
+    }
+
+    if (configB) {
+        printf("configB = true\n");
+    }
+
+    printf("two multiverse variables\n");
+
+}
 
 
 int main(int argc, char **argv)

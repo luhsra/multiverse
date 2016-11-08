@@ -21,10 +21,12 @@
 
 #include "tree-iterator.h"
 
-#include <set>
-#include <string>
+#include <bitset>
 #include <list>
+#include <map>
+#include <set>
 #include <sstream>
+#include <string>
 
 #define MV_SUFFIX ".multiverse"
 #define MV_VERSION 42
@@ -177,18 +179,14 @@ static bool is_multiverse_var(tree &var)
  *
  * Code bases on chkp_maybe_create_clone().
  */
-static tree clone_fndecl(tree fndecl, std::string suffix)
+static tree clone_fndecl(tree fndecl, std::string fname)
 {
-    std::string fname;
     tree new_decl;
     cgraph_node * node;
     cgraph_node * clone;
 
     new_decl = copy_node(fndecl);
 
-    fname = IDENTIFIER_POINTER(DECL_NAME(fndecl));
-    fname += MV_SUFFIX;  // ".multiverse"
-    fname += suffix.c_str();
     DECL_NAME(new_decl) = get_identifier(fname.c_str());
 
     SET_DECL_ASSEMBLER_NAME(new_decl, get_identifier(fname.c_str()));
@@ -213,10 +211,6 @@ static tree clone_fndecl(tree fndecl, std::string suffix)
                                  NULL, false, NULL, NULL);
         clone->lowered = true;
     }
-
-#ifdef DEBUG
-    fprintf(stderr, "---- Generated function clone '%s'\n", fname.c_str());
-#endif
 
     return new_decl;
 }
@@ -788,73 +782,60 @@ static void mv_info_finish(void *event_data, void *data)
 
 
 /*
- * TODO: this function may change as soon as we've figured out how to deal with
- * combinations of multiverse variabled
+ * Clone the current function and replace all variables in @var_map with the
+ * associated values.
  */
-static void multiverse_function(mv_info_fn_data &fn_info, tree var)
+static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> var_map)
 {
     tree fndecl = cfun->decl;
     tree clone;
     function * old_func = cfun;
-    function * clone_true, * clone_false;
+    function * clone_func;
 
+
+    std::map<tree, int>::iterator map_iter;
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-    std::string varname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
+    for (map_iter = var_map.begin(); map_iter != var_map.end(); map_iter++) {
+        tree var = map_iter->first;
+        int val = map_iter->second;
+
+        // Append variable assignments to the clone's name
+        std::stringstream ss;
+        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var)) << val;
+        fname += ss.str();
+    }
+    fname += MV_SUFFIX;
+
 
 #ifdef DEBUG
-    fprintf(stderr, "---- Generating function clones for '%s'\n", fname.c_str());
+    fprintf(stderr, "---- Generating function clone '%s'\n", fname.c_str());
 #endif
 
-    old_func = cfun;
-    pop_cfun();
-
-    // case TRUE
-    clone = clone_fndecl(fndecl, "_" + varname + "_true");
+    clone = clone_fndecl(fndecl, fname);
     gcc_assert(clone != fndecl);
-    clone_true = DECL_STRUCT_FUNCTION(clone);
-    push_cfun(clone_true);
-    replace_and_constify(var, true);
+
+    clone_func = DECL_STRUCT_FUNCTION(clone);
+    push_cfun(clone_func);
+    mv_info_mvfn_data mvfn;
+    mvfn.parent_fn_data = &fn_info;
+    mvfn.mvfn_decl = clone; // Store declartion for clone
+    for (map_iter = var_map.begin(); map_iter != var_map.end(); map_iter++) {
+        tree var = map_iter->first;
+        int val = map_iter->second;
+        replace_and_constify(var, val);
+
+        // Save the information about the assignment
+        mv_info_assignment_data assign;
+        assign.var_decl = var;
+        assign.lower_limit = val;
+        assign.upper_limit = val;
+        mvfn.assignments.push_back(assign);
+    }
+    fn_info.mv_functions.push_back(mvfn);
+
     pop_cfun();
-    // Store information about multiverse function
-    mv_info_mvfn_data mvfn_true;
-    mvfn_true.parent_fn_data = &fn_info;
-    mvfn_true.mvfn_decl = clone; // Store declartion for clone
-    mv_info_assignment_data assign_true;
-    assign_true.var_decl = var;
-    assign_true.lower_limit = 1;
-    assign_true.upper_limit = 1;
-    mvfn_true.assignments.push_back(assign_true);
-    // For testing
-    assign_true.upper_limit = 23;
-    mvfn_true.assignments.push_back(assign_true);
-    fn_info.mv_functions.push_back(mvfn_true);
-
-
-    // case FALSE
-    clone = clone_fndecl(fndecl, "_" + varname + "_false");
-    gcc_assert(clone != fndecl);
-    clone_false = DECL_STRUCT_FUNCTION(clone);
-    push_cfun(clone_false);
-    replace_and_constify(var, false);
-    pop_cfun();
-
-    // Store information about multiverse function
-    mv_info_mvfn_data mvfn_false;
-    mvfn_false.parent_fn_data = &fn_info;
-    mvfn_false.mvfn_decl = clone; // Store declartion for clone
-    mv_info_assignment_data assign_false;
-    assign_false.var_decl = var;
-    assign_false.lower_limit = 0;
-    assign_false.upper_limit = 0;
-    mvfn_false.assignments.push_back(assign_false);
-    fn_info.mv_functions.push_back(mvfn_false);
-
-
-    push_cfun(old_func);
 
     /* Create Information about the multiversed function */
-
-
 
     return;
 }
@@ -960,17 +941,32 @@ static unsigned int find_mv_vars_execute()
         mv_vars.erase(*varit);
     }
 
-    /* This functions is multiversed */
-    if (mv_vars.begin() != mv_vars.end()) {
-        mv_info_ctx.functions.push_back(mv_info_fn_data());
-        mv_info_fn_data &fn_data = mv_info_ctx.functions.back();
+    /* Multiverse this function w.r.t. multiverse variables */
+    const int numvars = mv_vars.size();
+    if (numvars == 0)
+        return 0;
 
-        fn_data.fn_decl = cfun->decl;
-        for (varit = mv_vars.begin(); varit != mv_vars.end(); varit++) {
-            multiverse_function(fn_data, *varit);
+    std::map<tree, int> var_map;
+    tree var_list[numvars];
+    std::copy(mv_vars.begin(), mv_vars.end(), var_list);
+
+    for (int i = 0; i < numvars; i++)
+        var_map[var_list[i]] = 0;
+
+    mv_info_ctx.functions.push_back(mv_info_fn_data());
+    mv_info_fn_data &fn_data = mv_info_ctx.functions.back();
+    fn_data.fn_decl = cfun->decl;
+
+    for (int i = 0; i < (1 << numvars); i++) {
+        std::bitset <sizeof(int)> bits(i);
+        std::map<tree, int> var_map_i(var_map);
+
+        // new assignment for current bitset
+        for (int j = 0; j < numvars; j++) {
+            var_map_i[var_list[j]] = bits[j];
         }
+        multiverse_function(fn_data,var_map_i);
     }
-
 
 #ifdef DEBUG
     fprintf(stderr, "************************************************************\n\n");
