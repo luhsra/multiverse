@@ -9,6 +9,7 @@ extern __attribute__((multiverse)) bool configC;
 
 //__attribute__((multiverse)) int * break_it;
 
+void multiverse_init();
 
 int foo()
 {
@@ -48,6 +49,8 @@ void two_references()
 
 int main(int argc, char **argv)
 {
+    multiverse_init();
+
     printf("Hello multiverse! %d\n", sizeof(configA));
 
     foo();
