@@ -332,10 +332,10 @@ build_info_type(tree info_type,
           struct mv_info *next;
 
           unsigned int n_variables;
-          struct mv_info_var **variables;
+          struct mv_info_var *variables;
 
           unsigned int n_functions;
-          struct mv_info_fn ** functions;
+          struct mv_info_fn * functions;
         };
     */
 
@@ -354,18 +354,14 @@ build_info_type(tree info_type,
 
     /* struct mv_info_var pointer pointer */
     RECORD_FIELD(
-        build_pointer_type (
-            build_qualified_type (
-                info_var_ptr_type, TYPE_QUAL_CONST)));
+          build_qualified_type (info_var_ptr_type, TYPE_QUAL_CONST));
 
     /* n_functions */
     RECORD_FIELD(get_mv_unsigned_t ());
 
     /* struct mv_info_fn pointer pointer */
     RECORD_FIELD(
-        build_pointer_type (
-            build_qualified_type (
-                info_fn_ptr_type, TYPE_QUAL_CONST)));
+        build_qualified_type (info_fn_ptr_type, TYPE_QUAL_CONST));
 
     finish_builtin_struct (info_type, "__mv_info", fields, NULL_TREE);
 }
@@ -409,7 +405,6 @@ build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
 tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx) {
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
-    tree fn_var = build_var(ctx->fn_type, "__mv_info_fn_");
     tree info_fields = TYPE_FIELDS (ctx->fn_type);
 
     /* Name of function */
@@ -448,13 +443,7 @@ tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx) {
 
     gcc_assert (!info_fields); // All fields are filled
 
-    tree ctor = build_constructor (ctx->fn_type, obj);
-
-    /* And Initialize a variable with it */
-    DECL_INITIAL (fn_var) = ctor;
-    varpool_node::finalize_decl (fn_var);
-
-    return build1(ADDR_EXPR, ctx->fn_ptr_type, fn_var);
+    return build_constructor (ctx->fn_type, obj);
 }
 
 
@@ -778,7 +767,7 @@ static void mv_info_finish(void *event_data, void *data)
     info_fields = DECL_CHAIN (info_fields);
 
     /* functions -- NULL */
-    tree fn_ary = build_array_from_list(ctx->functions, ctx->fn_ptr_type,
+    tree fn_ary = build_array_from_list(ctx->functions, ctx->fn_type,
                                         build_info_fn, ctx);
     CONSTRUCTOR_APPEND_ELT (obj, info_fields,
                             build1 (ADDR_EXPR, ctx->fn_ptr_type, fn_ary));

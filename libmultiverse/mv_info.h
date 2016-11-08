@@ -49,5 +49,5 @@ struct mv_info {
     struct mv_info_var *variables;
 
     unsigned int n_functions;
-    struct mv_info_fn ** functions;
+    struct mv_info_fn * functions;
 };
