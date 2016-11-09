@@ -60,6 +60,12 @@ struct mv_info_fn_data {
     std::list<mv_info_mvfn_data> mv_functions;
 };
 
+struct mv_info_callsite_data {
+    tree fn_decl;			 /* the function decl */
+    tree label_before, label_after;
+};
+
+
 
 struct mv_info_var_data {
     tree var_decl;			 /* the multiverse variable decl */
@@ -81,6 +87,7 @@ typedef struct {
     // information
     std::list<mv_info_var_data> variables;
     std::list<mv_info_fn_data> functions;
+    std::list<mv_info_callsite_data> callsites;
 } mv_info_ctx_t;
 
 static mv_info_ctx_t mv_info_ctx;
@@ -127,6 +134,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         }
     } else if (type == FUNCTION_TYPE) {
         // A function was declared as a multiversed function.
+        // FIXME: remove list of functions
         mv_plugin_ctx.functions.insert(*node);
     } else {
         error("variable %qD with %qE attribute must be an integer "
@@ -195,6 +203,20 @@ static bool is_multiverse_var(tree &var)
         return false;
 
     tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(var));
+    if(attr == NULL_TREE)
+        return false;
+    return true;
+}
+
+/*
+ * Return true if function is multiverse attributed.
+ */
+static bool is_multiverse_fn(tree &fn)
+{
+    if (TREE_CODE(fn) != FUNCTION_DECL)
+        return false;
+
+    tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(fn));
     if(attr == NULL_TREE)
         return false;
     return true;
@@ -874,6 +896,7 @@ static unsigned int find_mv_vars_execute()
     fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
 #endif
 
+/*
     if (!is_cloneable_function(cfun->decl)) {
 #ifdef DEBUG
         fprintf(stderr, ".... skipping, it's not multiverseable\n");
@@ -881,11 +904,9 @@ static unsigned int find_mv_vars_execute()
 #endif
         return 0;
     }
+*/
 
-    bool is_attributed_mv = false;
-    if (mv_plugin_ctx.functions.find(cfun->decl) != mv_plugin_ctx.functions.end()) {
-        is_attributed_mv = true;
-    }
+    bool is_attributed_mv = is_multiverse_fn(cfun->decl);
 
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;
@@ -897,10 +918,32 @@ static unsigned int find_mv_vars_execute()
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple stmt = gsi_stmt(gsi);
 
+
 #ifdef DEBUG
             fprintf(stderr, "---- Checking operands in statement: ");
             print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
 #endif
+            if (is_gimple_call(stmt)) {
+                tree callee = gimple_call_fndecl(stmt);
+                if (is_multiverse_fn(callee)) {
+                    debug_print("call to multiverse function: ");
+                    print_generic_stmt(stderr, callee, 0);
+                    tree label_before = create_artificial_label (UNKNOWN_LOCATION);
+                    gsi_insert_before (&gsi, gimple_build_label (label_before),
+                                       GSI_CONTINUE_LINKING);
+                    gsi_next(&gsi);
+                    tree label_after = create_artificial_label (UNKNOWN_LOCATION);
+                    gsi_insert_after (&gsi, gimple_build_label (label_after),
+                                       GSI_CONTINUE_LINKING);
+                    gsi_next(&gsi);
+
+                    mv_info_callsite_data callsite;
+                    callsite.fn_decl = callee;
+                    callsite.label_before = label_before;
+                    callsite.label_after = label_after;
+                    mv_info_ctx.callsites.push_back(callsite);
+                }
+            }
 
             if (!is_gimple_assign(stmt)) {
 #ifdef DEBUG
