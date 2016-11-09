@@ -83,8 +83,14 @@ typedef struct {
     std::list<mv_info_fn_data> functions;
 } mv_info_ctx_t;
 
-
 static mv_info_ctx_t mv_info_ctx;
+
+// The plugin also needs to store information
+typedef struct {
+    std::set<tree> functions; // all multiverse annotated functions
+} mv_plugin_ctx_t;
+
+static mv_plugin_ctx_t mv_plugin_ctx;
 
 static unsigned int find_mv_vars_execute();
 static tree build_info_mvfn(mv_info_mvfn_data &, mv_info_ctx_t *ctx);
@@ -99,8 +105,8 @@ static tree build_info_assignment(mv_info_assignment_data &, mv_info_ctx_t *ctx)
 
 
 /*
- * Handler for multiverse attributing.  Currently it's only used for debugging
- * purposes but maybe we need to do something at a later point.
+ * Handler for multiverse attribute of variables. We collect here all
+ * variables that are defined in this compilation unit.
  */
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                 bool *no_add_attrs)
@@ -112,21 +118,29 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 #endif
 
     int type = TREE_CODE(TREE_TYPE(*node));
-    if (type != INTEGER_TYPE && type != ENUMERAL_TYPE)
+    if (type == INTEGER_TYPE || type == ENUMERAL_TYPE) {
+        // We encountered a enumeral/int type. Therefore it should be a variable.
+        if (!DECL_EXTERNAL(*node)) { // Defined in this compilation unit.
+            mv_info_var_data mv_variable;
+            mv_variable.var_decl = *node;
+            mv_info_ctx.variables.push_back(mv_variable);
+        }
+    } else if (type == FUNCTION_TYPE) {
+        // A function was declared as a multiversed function.
+        mv_plugin_ctx.functions.insert(*node);
+    } else {
         error("variable %qD with %qE attribute must be an integer "
               "or enumeral type", *node, name);
+    }
 
 
     // FIXME: Error on weak attributed variables?
 
-    if (!DECL_EXTERNAL(*node)) { // Defined in this compilation unit.
-        mv_info_var_data mv_variable;
-        mv_variable.var_decl = *node;
-        mv_info_ctx.variables.push_back(mv_variable);
-    }
+
 
     return NULL_TREE;
 }
+
 
 
 /*
@@ -139,12 +153,14 @@ static struct attribute_spec mv_attribute =
     .name = "multiverse",
     .min_length = 0,
     .max_length = 0,
-    .decl_required = false,
+    .decl_required = true,
     .type_required = false,
     .function_type_required = false,
     .handler = handle_mv_attribute,
     .affects_type_identity = false,
 };
+
+
 
 
 /*
@@ -502,7 +518,7 @@ static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
 
     /* Pointer to variable as a (void *) */
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, build_pointer_type(void_type_node), 
+                           build1(ADDR_EXPR, build_pointer_type(void_type_node),
                                   var_info.var_decl));
     info_fields = DECL_CHAIN(info_fields);
 
@@ -866,6 +882,11 @@ static unsigned int find_mv_vars_execute()
         return 0;
     }
 
+    bool is_attributed_mv = false;
+    if (mv_plugin_ctx.functions.find(cfun->decl) != mv_plugin_ctx.functions.end()) {
+        is_attributed_mv = true;
+    }
+
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;
     basic_block bb;
@@ -908,11 +929,19 @@ static unsigned int find_mv_vars_execute()
                 if (!is_multiverse_var(var))
                     continue;
 
+                // Function might not be attributed with multiverse. Emit a warning
+                if (!is_attributed_mv) {
+                    location_t loc = gimple_location(stmt);
+                    warning_at(loc, 0, "function uses multiverse variables without being multiverse itself");
+                    continue;
+                }
 #ifdef DEBUG
                 fprintf(stderr, "...found multiverse operand: ");
                 print_generic_stmt(stderr, var, 0);
 #endif
                 mv_vars.insert(var);
+
+
             }
         }
     }
@@ -1005,4 +1034,3 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
 
     return 0;
 }
-

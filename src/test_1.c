@@ -11,7 +11,7 @@ extern __attribute__((multiverse)) bool configC;
 
 void multiverse_init();
 
-int foo()
+int __attribute((multiverse)) foo()
 {
     if (configA) {
         printf("configA = true\n");
@@ -32,7 +32,7 @@ int foo()
 //}
 //
 //
-void two_references()
+void __attribute((multiverse)) two_references()
 {
     if (configA) {
         printf("configA = true\n");
@@ -44,6 +44,10 @@ void two_references()
 
     printf("two multiverse variables\n");
 
+}
+
+int  not_multiversed() {
+    return configB;
 }
 
 
