@@ -83,6 +83,8 @@ typedef struct {
     tree var_type, var_ptr_type;
     tree mvfn_type, mvfn_ptr_type;
     tree assignment_type, assignment_ptr_type;
+    tree callsite_type, callsite_ptr_type;
+
 
     // information
     std::list<mv_info_var_data> variables;
@@ -102,7 +104,6 @@ static mv_plugin_ctx_t mv_plugin_ctx;
 static unsigned int find_mv_vars_execute();
 static tree build_info_mvfn(mv_info_mvfn_data &, mv_info_ctx_t *ctx);
 static tree build_info_assignment(mv_info_assignment_data &, mv_info_ctx_t *ctx);
-
 
 #ifdef DEBUG
 #define debug_print(args...) fprintf(stderr, args)
@@ -125,6 +126,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 #endif
 
     int type = TREE_CODE(TREE_TYPE(*node));
+    // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE) {
         // We encountered a enumeral/int type. Therefore it should be a variable.
         if (!DECL_EXTERNAL(*node)) { // Defined in this compilation unit.
@@ -137,12 +139,12 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         // FIXME: remove list of functions
         mv_plugin_ctx.functions.insert(*node);
     } else {
+        // FIXME: Error message for functions
         error("variable %qD with %qE attribute must be an integer "
               "or enumeral type", *node, name);
     }
 
 
-    // FIXME: Error on weak attributed variables?
 
 
 
@@ -365,8 +367,10 @@ tree build_array_from_list(std::list<T> &elements, tree element_type,
     fields = field;
 
 
-static void build_info_type(tree info_type, tree info_var_ptr_type,
-                            tree info_fn_ptr_type)
+static void build_info_type(tree info_type,
+                            tree info_var_ptr_type,
+                            tree info_fn_ptr_type,
+                            tree info_callsite_ptr_type)
 {
     /*  struct __mv_info {
           unsigned int version;
@@ -378,6 +382,9 @@ static void build_info_type(tree info_type, tree info_var_ptr_type,
 
           unsigned int n_functions;
           struct mv_info_fn * functions;
+
+          unsigned int n_callsites;
+          struct mv_info_callsite * callsites;
         };
     */
 
@@ -400,6 +407,12 @@ static void build_info_type(tree info_type, tree info_var_ptr_type,
 
     /* struct mv_info_fn pointer pointer */
     RECORD_FIELD(build_qualified_type(info_fn_ptr_type, TYPE_QUAL_CONST));
+
+    /* n_callsites */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    /* struct mv_info_fn pointer pointer */
+    RECORD_FIELD(build_qualified_type(info_callsite_ptr_type, TYPE_QUAL_CONST));
 
     finish_builtin_struct(info_type, "__mv_info", fields, NULL_TREE);
 }
@@ -570,6 +583,59 @@ static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
 }
 
 
+static void build_info_callsite_type(tree info_var_type)
+{
+    /*
+      struct __mv_info_callsite {
+        void * callee;
+        void * label_before;
+        void * label_after;
+      };
+    */
+    tree field, fields = NULL_TREE;
+
+    /* Pointer to callee body */
+    RECORD_FIELD(build_pointer_type (void_type_node));
+
+    /* label_before */
+    RECORD_FIELD(build_pointer_type (void_type_node));
+
+    /* label_after */
+    RECORD_FIELD(build_pointer_type (void_type_node));
+
+    finish_builtin_struct(info_var_type, "__mv_info_callsite", fields, NULL_TREE);
+}
+
+static tree build_info_callsite(mv_info_callsite_data &cs_info, mv_info_ctx_t *ctx)
+{
+    vec<constructor_elt, va_gc> *obj = NULL;
+    tree info_fields = TYPE_FIELDS(ctx->callsite_type);
+
+    /* called function */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build1(ADDR_EXPR, TREE_TYPE(info_fields),
+                                  cs_info.fn_decl));
+    info_fields = DECL_CHAIN(info_fields);
+
+    /* label_before */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build1(ADDR_EXPR, TREE_TYPE(info_fields),
+                                  cs_info.label_before));
+    info_fields = DECL_CHAIN(info_fields);
+
+    /* label_after */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build1(ADDR_EXPR, TREE_TYPE(info_fields),
+                                  cs_info.label_after));
+    info_fields = DECL_CHAIN(info_fields);
+
+    gcc_assert(!info_fields); // All fields are filled
+
+    return build_constructor(ctx->callsite_type, obj);
+}
+
+
+
 static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_type)
 {
     /*
@@ -698,18 +764,22 @@ static void build_types(mv_info_ctx_t *t)
     t->var_type = lang_hooks.types.make_type(RECORD_TYPE);
     t->mvfn_type = lang_hooks.types.make_type(RECORD_TYPE);
     t->assignment_type = lang_hooks.types.make_type(RECORD_TYPE);
+    t->callsite_type = lang_hooks.types.make_type(RECORD_TYPE);
 
     t->info_ptr_type = build_pointer_type(t->info_type);
     t->fn_ptr_type = build_pointer_type(t->fn_type);
     t->var_ptr_type = build_pointer_type(t->var_type);
     t->mvfn_ptr_type = build_pointer_type(t->mvfn_type);
     t->assignment_ptr_type = build_pointer_type(t->assignment_type);
+    t->callsite_ptr_type = build_pointer_type(t->assignment_type);
 
-    build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type);
+
+    build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type, t->callsite_ptr_type);
     build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
     build_info_var_type(t->var_type, t->mvfn_ptr_type);
     build_info_mvfn_type(t->mvfn_type, t->assignment_ptr_type);
     build_info_assignment_type(t->assignment_type, t->var_ptr_type);
+    build_info_callsite_type(t->callsite_type);
 }
 
 
@@ -790,11 +860,25 @@ static void mv_info_finish(void *event_data, void *data)
                                           n_functions));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* functions -- NULL */
+    /* functions */
     tree fn_ary = build_array_from_list(ctx->functions, ctx->fn_type,
                                         build_info_fn, ctx);
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                           build1(ADDR_EXPR, ctx->fn_ptr_type, fn_ary));
+    info_fields = DECL_CHAIN(info_fields);
+
+    /* n_functions */
+    unsigned n_callsites = ctx->callsites.size();
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build_int_cstu(TREE_TYPE(info_fields),
+                                          n_callsites));
+    info_fields = DECL_CHAIN(info_fields);
+
+    /* callsites -- NULL */
+    tree callsite_ary = build_array_from_list(ctx->callsites, ctx->callsite_type,
+                                        build_info_callsite, ctx);
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build1(ADDR_EXPR, ctx->callsite_ptr_type, callsite_ary));
     info_fields = DECL_CHAIN(info_fields);
 
     gcc_assert(!info_fields); // All fields are filled
@@ -936,6 +1020,9 @@ static unsigned int find_mv_vars_execute()
                     gsi_insert_after (&gsi, gimple_build_label (label_after),
                                        GSI_CONTINUE_LINKING);
                     gsi_next(&gsi);
+                    DECL_NONLOCAL(label_before) = 1;
+                    DECL_NONLOCAL(label_after) = 1;
+
 
                     mv_info_callsite_data callsite;
                     callsite.fn_decl = callee;

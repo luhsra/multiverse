@@ -20,11 +20,18 @@ struct mv_info_fn {
 
     /* Where is the original function body located in the text
      * segment? */
-    void * original_function;
+    void * function_body;
 
     /* What variants exist for this function */
     unsigned int n_mv_functions;
     struct mv_info_mvfn * mv_functions;
+};
+
+struct mv_info_callsite {
+    struct mv_info_fn *function;
+
+    void *label_before;
+    void *label_after;
 };
 
 struct mv_info_var {
@@ -50,4 +57,7 @@ struct mv_info {
 
     unsigned int n_functions;
     struct mv_info_fn * functions;
+
+    unsigned int n_callsites;
+    struct mv_info_callsite * callsites;
 };

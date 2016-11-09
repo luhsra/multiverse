@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "mv_info.h"
 #include <assert.h>
+#include <stdint.h>
 
 extern void foo();
 
@@ -23,6 +24,18 @@ multiverse_resolve_var_info(void  *mv_variable) {
     return NULL;
 }
 
+static struct mv_info_fn *
+multiverse_resolve_fn_info(void  *function_body) {
+    struct mv_info *info = mv_information;
+    while(info) {
+        for (unsigned i = 0; i < info->n_functions; ++i) {
+            struct mv_info_fn *fn = &info->functions[i];
+            if (fn->function_body == function_body) return fn;
+        }
+    }
+    return NULL;
+}
+
 void multiverse_init() {
     struct mv_info *info = mv_information;
 
@@ -32,7 +45,7 @@ void multiverse_init() {
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn * fn = &info->functions[i];
             fprintf(stderr, "  %s %p, %d variants\n", fn->name,
-                    fn->original_function,
+                    fn->function_body,
                     fn->n_mv_functions);
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
@@ -63,6 +76,18 @@ void multiverse_init() {
             fprintf(stderr, "  %s %p (width %d)\n", var->name,
                     var->variable,
                     var->variable_width);
+        }
+
+        fprintf(stderr, "%d callsites were recored\n", info->n_callsites);
+        for (unsigned i = 0; i < info->n_callsites; ++i) {
+            struct mv_info_callsite *var = &info->callsites[i];
+            var->function = multiverse_resolve_fn_info(var->function);
+            assert(var->function && "Function from Callsite could not be resovled");
+            fprintf(stderr, "  [%p,%p (%d bytes)] -> %s\n",
+                    var->label_before,
+                    var->label_after,
+                    (intptr_t)var->label_after - (intptr_t)var->label_before,
+                    var->function->name);
         }
         // mv_info from next file
         info = info->next;
