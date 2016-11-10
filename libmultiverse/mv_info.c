@@ -18,7 +18,7 @@ multiverse_resolve_var_info(void  *mv_variable) {
     while(info) {
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
-            if (var->variable == mv_variable) return var;
+            if (var->variable_location == mv_variable) return var;
         }
     }
     return NULL;
@@ -74,7 +74,7 @@ void multiverse_init() {
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
             fprintf(stderr, "  %s %p (width %d)\n", var->name,
-                    var->variable,
+                    var->variable_location,
                     var->variable_width);
         }
 

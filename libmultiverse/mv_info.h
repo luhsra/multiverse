@@ -4,7 +4,7 @@ struct mv_info_fn;
 struct mv_info;
 
 struct mv_info_assignment {
-    struct mv_info_var * variable;
+    struct mv_info_var * variable; // Given as a variable_location pointer
     int lower_bound;
     int upper_bound;
 };
@@ -25,24 +25,23 @@ struct mv_info_fn {
     /* What variants exist for this function */
     unsigned int n_mv_functions;
     struct mv_info_mvfn * mv_functions;
+
+    void *data;
 };
 
 struct mv_info_callsite {
-    struct mv_info_fn *function;
+    struct mv_info_fn *function; // Given as function_body pointer
 
     void *label_before;
     void *label_after;
 };
 
 struct mv_info_var {
-    char * const name;
-    void * variable;
+    char * const  name;
+    void *        variable_location;
     unsigned char variable_width;
 
-    // For the use of the runtime system
-    int materialized_value;
-    unsigned int n_mv_functions;
-    struct mv_info_mvfn ** mv_functions;
+    void *data;
 };
 
 struct mv_info {

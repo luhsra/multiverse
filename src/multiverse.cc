@@ -444,6 +444,9 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
     /* mv_functions pointer */
     RECORD_FIELD(build_qualified_type(info_mvfn_ptr_type, TYPE_QUAL_CONST));
 
+    /* void * data */
+    RECORD_FIELD(build_pointer_type(void_type_node));
+
     finish_builtin_struct(info_fn_type, "__mv_info_fn", fields, NULL_TREE);
 }
 
@@ -489,13 +492,17 @@ tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx)
                            build1(ADDR_EXPR, ctx->mvfn_ptr_type, mvfn_ary));
     info_fields = DECL_CHAIN(info_fields);
 
+    /* void * data; */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN(info_fields);
+
     gcc_assert(!info_fields); // All fields are filled
 
     return build_constructor(ctx->fn_type, obj);
 }
 
 
-static void build_info_var_type(tree info_var_type, tree info_mvfn_ptr_type)
+static void build_info_var_type(tree info_var_type)
 {
     /*
       struct __mv_info_var {
@@ -504,10 +511,7 @@ static void build_info_var_type(tree info_var_type, tree info_mvfn_ptr_type)
         void * variable;
         unsigned char width;
 
-        int materialized_value;
-
-        unsigned int n_mv_functions;
-        struct mv_info_mvfn ** mv_functions;
+        void * data;
       };
     */
     tree field, fields = NULL_TREE;
@@ -521,14 +525,8 @@ static void build_info_var_type(tree info_var_type, tree info_mvfn_ptr_type)
     /* width */
     RECORD_FIELD(unsigned_char_type_node);
 
-    /* materialized value */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* n_functions */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* functions pointer */
-    RECORD_FIELD(build_qualified_type(info_mvfn_ptr_type, TYPE_QUAL_CONST));
+    /* void * data */
+    RECORD_FIELD(build_pointer_type(void_type_node));
 
     finish_builtin_struct(info_var_type, "__mv_info_var", fields, NULL_TREE);
 }
@@ -563,17 +561,7 @@ static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
                             build_int_cstu(TREE_TYPE(info_fields), width));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* materializd value -- Filled by Runtime System */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields), 0));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* n_functions -- Filled by Runtime System */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields), 0));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* functions -- Filled by Runtime System */
+    /* void * data Filled by Runtime System */
     CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
     info_fields = DECL_CHAIN(info_fields);
 
@@ -776,7 +764,7 @@ static void build_types(mv_info_ctx_t *t)
 
     build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type, t->callsite_ptr_type);
     build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
-    build_info_var_type(t->var_type, t->mvfn_ptr_type);
+    build_info_var_type(t->var_type);
     build_info_mvfn_type(t->mvfn_type, t->assignment_ptr_type);
     build_info_assignment_type(t->assignment_type, t->var_ptr_type);
     build_info_callsite_type(t->callsite_type);
