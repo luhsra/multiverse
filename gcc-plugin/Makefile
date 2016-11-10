@@ -12,8 +12,8 @@ CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti
 
 all: $(PLUGIN).so
 
-$(PLUGIN).so: $(PLUGIN).cc
-	$(HOST_GCC) -shared $(CXXFLAGS) $(PLUGIN).cc -o $(PLUGIN).so
+$(PLUGIN).so: multiverse.o mv-info.o
+	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
 
 clean:
 	rm -f *.o *.so test
@@ -35,7 +35,7 @@ test_1: debug libmultiverse
 test_1.S: debug libmultiverse
 	rm -f test_1 test_1.c.*
 	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so test_1.c -fdump-tree-optimized $(CFLAGS) \
-	   -S -o- 
+	   -S -o-
 	# less test_1.c.211t.optimized
 
 libmultiverse:
