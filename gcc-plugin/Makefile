@@ -24,12 +24,9 @@ clean:
 debug: CXXFLAGS+= -DDEBUG -g
 debug: all
 
-test: test_1
-
 test_1: debug libmultiverse
 	rm -f test_1 test_1.c.*
-	$(TARGET_GCC) -fplugin=$(PWD)/$(PLUGIN).so -o test_1 test_1.c -fdump-tree-optimized $(CFLAGS) \
-	   -L../libmultiverse -lmultiverse
+
 	# less test_1.c.211t.optimized
 
 test_1.S: debug libmultiverse

@@ -60,3 +60,9 @@ struct mv_info {
     unsigned int n_callsites;
     struct mv_info_callsite * callsites;
 };
+
+void multiverse_init();
+struct mv_info_fn *   multiverse_fn_info(void * function_body);
+struct mv_info_var *  multiverse_var_info(void * variable_location);
+
+void multiverse_dump_info(FILE*);
