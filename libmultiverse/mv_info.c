@@ -2,8 +2,7 @@
 #include "multiverse.h"
 #include <assert.h>
 #include <stdint.h>
-
-extern void foo();
+#include <stdlib.h>
 
 static struct mv_info *mv_information;
 
@@ -38,10 +37,26 @@ multiverse_fn_info(void  *function_body) {
     return NULL;
 }
 
-void multiverse_init() {
-    struct mv_info *info = mv_information;
+int multiverse_init() {
+    struct mv_info *info;
 
-    while (info) {
+    /* Step 1: Set up all extra datastructures */
+    for (info = mv_information; info; info = info->next) {
+        for (unsigned i = 0; i < info->n_functions; ++i) {
+            struct mv_info_fn * fn = &info->functions[i];
+            fn->extra = calloc(1, sizeof(struct mv_info_fn_extra));
+            if (!fn->extra) return -1;
+        }
+        for (unsigned i = 0; i < info->n_variables; ++i) {
+            struct mv_info_var *var = &info->variables[i];
+            var->extra = calloc(1, sizeof(struct mv_info_var_extra));
+            if (!var->extra) return -1;
+        }
+    }
+
+    // Step 2: Connect all the moving parts form all compilation units
+    //         and fill the extra data.
+    for (info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn * fn = &info->functions[i];
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
@@ -49,37 +64,79 @@ void multiverse_init() {
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
                     // IMPORTANT: Setup variable pointer
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
-                    struct mv_info_var * var_info = multiverse_var_info(assign->variable);
-                    assert(var_info != NULL);
-                    assign->variable = var_info;
+                    struct mv_info_var * var = multiverse_var_info(assign->variable);
+                    assert(var != NULL);
+                    assign->variable = var;
 
                     assert(assign->lower_bound <= assign->upper_bound);
+                    // Add function to list of associated functions of
+                    // variable, if not yet present
+                    int found = 0;
+                    for (unsigned int idx = 0; idx < var->extra->n_functions; idx++) {
+                        if (var->extra->functions[idx] == fn) {
+                            found = 1;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        int n = var->extra->n_functions;
+                        var->extra->functions = realloc(var->extra->functions,
+                                                        (n + 1) * sizeof(struct mv_info_fn *));
+                        if (!var->extra->functions) return -1;
+                        var->extra->functions[var->extra->n_functions++] = fn;
+                    }
                 }
 
             }
+
+
         }
 
         for (unsigned i = 0; i < info->n_callsites; ++i) {
-            struct mv_info_callsite *var = &info->callsites[i];
-            var->function = multiverse_fn_info(var->function);
-            assert(var->function && "Function from Callsite could not be resovled");
+            struct mv_info_callsite *cs = &info->callsites[i];
+            struct mv_info_fn *fn = multiverse_fn_info(cs->function);
+            cs->function = fn;
+            assert(fn && "Function from Callsite could not be resovled");
+
+            // Try to find an x86 callq (e8 <offset>
+            void * call_insn = NULL;
+            int instances = 0;
+            for (unsigned char *p = ((char *) cs->label_after) - 5; p != cs->label_before; p --) {
+                void * addr = p + *(int*)(p + 1) + 5;
+                if (*p == 0xe8 && addr == fn->function_body) {
+                    call_insn = p; instances ++;
+                }
+            }
+            if (instances == 1) {
+                cs->type = CS_TYPE_X86_CALLQ;
+                cs->call_insn = call_insn;
+            } else if (instances == 0) {
+                cs->type = CS_TYPE_NOTFOUND;
+                cs->call_insn = NULL;
+            } else if (instances == 0) {
+                cs->type = CS_TYPE_INVALID;
+                cs->call_insn = NULL;
+            }
+            /* Add variable to the list of callsites of the function */
+            int n = fn->extra->n_callsites;
+            fn->extra->callsites = realloc(fn->extra->callsites,
+                                           (n + 1) * sizeof(struct mv_info_callsite *));
+            if (!fn->extra->callsites) return -1;
+            fn->extra->callsites[fn->extra->n_callsites++] = cs;
         }
-        // mv_info from next file
-        info = info->next;
     }
 }
 
 void multiverse_dump_info(FILE *out) {
-    struct mv_info *info = mv_information;
-
-    while (info) {
+    for (struct mv_info *info = mv_information; info; info = info->next) {
         fprintf(out, "mv_info %p, version: %d", info, info->version);
         fprintf(out, ", %d functions multiversed\n", info->n_functions);
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn * fn = &info->functions[i];
-            fprintf(out, "  fn: %s %p, %d variants\n", fn->name,
+            fprintf(out, "  fn: %s %p, %d variants, %d callsite(s)\n", fn->name,
                     fn->function_body,
-                    fn->n_mv_functions);
+                    fn->n_mv_functions,
+                    fn->extra->n_callsites);
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
                 // Execute function mv_func();
@@ -98,21 +155,19 @@ void multiverse_dump_info(FILE *out) {
         fprintf(out, "%d variables were multiversed\n", info->n_variables);
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
-            fprintf(out, "  var: %s %p (width %d)\n", var->name,
+            fprintf(out, "  var: %s %p (width %d), %d functions\n", var->name,
                     var->variable_location,
-                    var->variable_width);
+                    var->variable_width,
+                    var->extra->n_functions);
         }
 
         fprintf(out, "%d callsites were recored\n", info->n_callsites);
         for (unsigned i = 0; i < info->n_callsites; ++i) {
             struct mv_info_callsite *var = &info->callsites[i];
-            fprintf(out, "  callsite: [%p,%p (%d bytes)] -> %s\n",
-                    var->label_before,
-                    var->label_after,
-                    (intptr_t)var->label_after - (intptr_t)var->label_before,
+            fprintf(out, "  callsite: [%d:%p] -> %s\n",
+                    var->type,
+                    var->call_insn,
                     var->function->name);
         }
-        // mv_info from next file
-        info = info->next;
     }
 }

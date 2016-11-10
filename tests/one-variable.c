@@ -29,5 +29,7 @@ int main(int argc, char **argv)
     assert(foo_info != NULL);
     assert(foo_info->n_mv_functions == 2);
 
+    foo();
+
     return 0;
 }
