@@ -5,7 +5,7 @@ PLUGIN=$(PLUGIN_DIR)/multiverse.so
 LIBRARY_DIR=../libmultiverse
 LIBRARY=$(LIBRARY_DIR)/libmultiverse.a
 
-CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR)
+CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -gdwarf-2 -O2
 LDFLAGS = -L$(LIBRARY_DIR) -lmultiverse
 
 TEST_SRCS=$(shell echo *.c)

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static struct mv_info *mv_information;
+struct mv_info *mv_information;
 
 /* This function is called from the constructors in each object file
    with a multiverse function */
@@ -14,7 +14,7 @@ void __multiverse_init(struct mv_info *info) {
 }
 
 struct mv_info_var *
-multiverse_var_info(void  *variable_location) {
+multiverse_info_var(void  *variable_location) {
     struct mv_info *info = mv_information;
     while(info) {
         for (unsigned i = 0; i < info->n_variables; ++i) {
@@ -26,7 +26,7 @@ multiverse_var_info(void  *variable_location) {
 }
 
 struct mv_info_fn *
-multiverse_fn_info(void  *function_body) {
+multiverse_info_fn(void  *function_body) {
     struct mv_info *info = mv_information;
     while(info) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
@@ -51,6 +51,8 @@ int multiverse_init() {
             struct mv_info_var *var = &info->variables[i];
             var->extra = calloc(1, sizeof(struct mv_info_var_extra));
             if (!var->extra) return -1;
+            // Mark the variable as unitialized
+            var->extra->materialized_value = MV_UNINITIALIZED_VARIABLE;
         }
     }
 
@@ -64,7 +66,7 @@ int multiverse_init() {
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
                     // IMPORTANT: Setup variable pointer
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
-                    struct mv_info_var * var = multiverse_var_info(assign->variable);
+                    struct mv_info_var * var = multiverse_info_var(assign->variable);
                     assert(var != NULL);
                     assign->variable = var;
 
@@ -94,14 +96,16 @@ int multiverse_init() {
 
         for (unsigned i = 0; i < info->n_callsites; ++i) {
             struct mv_info_callsite *cs = &info->callsites[i];
-            struct mv_info_fn *fn = multiverse_fn_info(cs->function);
+            struct mv_info_callsite_original *cso =
+                (struct mv_info_callsite_original *) cs;
+            struct mv_info_fn *fn = multiverse_info_fn(cso->function_body);
             cs->function = fn;
             assert(fn && "Function from Callsite could not be resovled");
 
             // Try to find an x86 callq (e8 <offset>
             void * call_insn = NULL;
             int instances = 0;
-            for (unsigned char *p = ((char *) cs->label_after) - 5; p != cs->label_before; p --) {
+            for (unsigned char *p = ((char *) cso->label_after) - 5; p != cso->label_before; p --) {
                 void * addr = p + *(int*)(p + 1) + 5;
                 if (*p == 0xe8 && addr == fn->function_body) {
                     call_insn = p; instances ++;
@@ -141,7 +145,7 @@ void multiverse_dump_info(FILE *out) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
                 // Execute function mv_func();
                 fprintf(out, "    mvfn: %p (vars %d)\n",
-                        mvfn->mv_function, mvfn->n_assignments);
+                        mvfn->function_body, mvfn->n_assignments);
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
                     fprintf(out, "      assign: %s in [%d, %d]\n",

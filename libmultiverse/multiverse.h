@@ -1,17 +1,22 @@
+#ifndef __MULTIVERSE_H
+#define __MULTIVERSE_H
+
 struct mv_info_var;
 struct mv_info_mvfn;
 struct mv_info_fn;
 struct mv_info;
 struct mv_info_callsite;
 
+typedef unsigned int mv_value_t;
+
 struct mv_info_assignment {
     struct mv_info_var * variable; // Given as a variable_location pointer
-    int lower_bound;
-    int upper_bound;
+    mv_value_t lower_bound;
+    mv_value_t upper_bound;
 };
 
 struct mv_info_mvfn {
-    void * mv_function;
+    void * function_body;
     unsigned int n_assignments;
     struct mv_info_assignment * assignments;
 };
@@ -19,6 +24,7 @@ struct mv_info_mvfn {
 struct mv_info_fn_extra {
     unsigned int n_callsites;
     struct mv_info_callsite **callsites;
+    struct mv_info_mvfn *active_mvfn;
 };
 
 struct mv_info_fn {
@@ -44,22 +50,25 @@ typedef enum  {
     CS_TYPE_X86_CALLQ,
 } mv_info_callsite_type;
 
-struct mv_info_callsite {
-    struct mv_info_fn *function; // Given as function_body pointer
-    union {
-        void *label_before;
-        mv_info_callsite_type type;
-    };
-    union {
-        void *label_after;
-        void *call_insn;
-    };
+struct mv_info_callsite_original {
+    void *function_body;
+    void *label_before;
+    void *label_after;
 };
 
+struct mv_info_callsite {
+    struct mv_info_fn *function;
+    mv_info_callsite_type type;
+    void *call_insn;
+};
+
+#define MV_UNINITIALIZED_VARIABLE ((mv_value_t) ~0)
+
 struct mv_info_var_extra {
-    unsigned long long materialized_value;
     unsigned int n_functions;
     struct mv_info_fn **functions;
+
+    mv_value_t materialized_value;
 };
 
 
@@ -93,7 +102,13 @@ struct mv_info {
 };
 
 int multiverse_init();
-struct mv_info_fn *   multiverse_fn_info(void * function_body);
-struct mv_info_var *  multiverse_var_info(void * variable_location);
-
 void multiverse_dump_info(FILE*);
+
+
+struct mv_info_fn *   multiverse_info_fn(void * function_body);
+struct mv_info_var *  multiverse_info_var(void * variable_location);
+
+void multiverse_commit_fn(struct mv_info_fn *);
+
+
+#endif
