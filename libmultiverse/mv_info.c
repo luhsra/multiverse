@@ -105,21 +105,26 @@ int multiverse_init() {
             // Try to find an x86 callq (e8 <offset>
             void * call_insn = NULL;
             int instances = 0;
-            for (unsigned char *p = ((char *) cso->label_after) - 5; p != cso->label_before; p --) {
-                void * addr = p + *(int*)(p + 1) + 5;
-                if (*p == 0xe8 && addr == fn->function_body) {
-                    call_insn = p; instances ++;
-                }
-            }
-            if (instances == 1) {
-                cs->type = CS_TYPE_X86_CALLQ;
-                cs->call_insn = call_insn;
-            } else if (instances == 0) {
-                cs->type = CS_TYPE_NOTFOUND;
-                cs->call_insn = NULL;
-            } else if (instances == 0) {
+            if (cso->label_after <= cso->label_before) {
                 cs->type = CS_TYPE_INVALID;
-                cs->call_insn = NULL;
+                cs->call_insn = 0;
+            } else {
+                for (unsigned char *p = ((char *) cso->label_after) - 5; p != cso->label_before; p --) {
+                    void * addr = p + *(int*)(p + 1) + 5;
+                    if (*p == 0xe8 && addr == fn->function_body) {
+                        call_insn = p; instances ++;
+                    }
+                }
+                if (instances == 1) {
+                    cs->type = CS_TYPE_X86_CALLQ;
+                    cs->call_insn = call_insn;
+                } else if (instances == 0) {
+                    cs->type = CS_TYPE_NOTFOUND;
+                    cs->call_insn = NULL;
+                } else if (instances == 0) {
+                    cs->type = CS_TYPE_INVALID;
+                    cs->call_insn = NULL;
+                }
             }
             /* Add variable to the list of callsites of the function */
             int n = fn->extra->n_callsites;

@@ -108,16 +108,17 @@ static void multiverse_select_mvfn(mv_select_ctx_t *ctx,
     prologue[0] = 0xe9;
     *((int *)&prologue[1]) = callq_argument(prologue, mvfn->function_body);
     __clear_cache(prologue, prologue+5);
-    printf("%p: jmp %p\n", prologue, mvfn->function_body);
+    printf("patch %p: jmp %p\n", prologue, mvfn->function_body);
 
 
     for (unsigned i = 0; i < fn->extra->n_callsites; i++) {
         char *call = fn->extra->callsites[i]->call_insn;
+        if (!call) continue;
         multiverse_select_unprotect(ctx, call);
         multiverse_select_unprotect(ctx, call+5);
         *((int *)&call[1]) = callq_argument(call, mvfn->function_body);
         __clear_cache(call, call+5);
-        printf("%p: call %p\n", call, mvfn->function_body);
+        printf("patch %p: call %p\n", call, mvfn->function_body);
     }
 
     fn->extra->active_mvfn = mvfn;
