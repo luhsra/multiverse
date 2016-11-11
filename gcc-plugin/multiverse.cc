@@ -31,6 +31,7 @@
 
 #define MV_SUFFIX ".multiverse"
 
+
 int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "42" };
@@ -336,34 +337,61 @@ static unsigned int find_mv_vars_execute()
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;
     basic_block bb;
+    std::list<gimple> split_insn;
     /* Iterate of each basic block in current function. */
     FOR_EACH_BB_FN(bb, cfun) {
         /* Iterate over each GIMPLE statement. */
         gimple_stmt_iterator gsi;
+        gimple last_stmt = NULL;
+        gimple stmt = NULL;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
-            gimple stmt = gsi_stmt(gsi);
-
-
+            last_stmt = stmt;
+            stmt = gsi_stmt(gsi);
 #ifdef DEBUG
             fprintf(stderr, "---- Checking operands in statement: ");
-            print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
+            // print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
 #endif
             if (is_gimple_call(stmt)) {
                 tree callee = gimple_call_fndecl(stmt);
                 if (is_multiverse_fn(callee)) {
                     debug_print("call to multiverse function: ");
                     print_generic_stmt(stderr, callee, 0);
-                    tree label_before = create_artificial_label (UNKNOWN_LOCATION);
-                    gsi_insert_before (&gsi, gimple_build_label (label_before),
-                                       GSI_CONTINUE_LINKING);
-                    gsi_next(&gsi);
-                    tree label_after = create_artificial_label (UNKNOWN_LOCATION);
-                    gsi_insert_after (&gsi, gimple_build_label (label_after),
-                                       GSI_CONTINUE_LINKING);
-                    gsi_next(&gsi);
-                    DECL_NONLOCAL(label_before) = 1;
-                    DECL_NONLOCAL(label_after) = 1;
+                    /* We split this basic block after the call, and
+                       before the call label */
+                    if (last_stmt) {
+                        split_insn.push_back(last_stmt);
+                        /* printf("before: ");
+                           print_gimple_stmt(stdout, split_insn.back(), 0, 0);
+                        */
+                    }
+                    split_insn.push_back(stmt);
+                    /*
+                      printf("after: ");
+                      print_gimple_stmt(stdout, split_insn.back(), 0, 0);
+                    */
 
+
+                    tree label_before = create_artificial_label (UNKNOWN_LOCATION);
+                    gimple g_before = gimple_build_label (label_before);
+                    gsi_insert_before (&gsi, g_before, GSI_SAME_STMT);
+                    tree label_after = create_artificial_label (UNKNOWN_LOCATION);
+                    gimple g_after = gimple_build_label (label_after);
+                    gsi_insert_after (&gsi, g_after, GSI_SAME_STMT);
+                    gsi_next(&gsi);
+
+                    // We mimic to be a user-defined label, in order
+                    // to not get removed on merging of basic blocks.
+                    FORCED_LABEL(label_before) = 1;
+                    FORCED_LABEL(label_after) = 1;
+                    DECL_ARTIFICIAL(label_before) = 0;
+                    DECL_ARTIFICIAL(label_after) = 0;
+
+
+
+                    //debug_print("before: %d", bb->index);
+                    //print_generic_stmt(stderr, label_before, 0);
+                    // debug_print("after: ");
+                    // print_generic_stmt(stderr, label_after, 0);
 
                     mv_info_callsite_data callsite;
                     callsite.fn_decl = callee;
@@ -374,9 +402,7 @@ static unsigned int find_mv_vars_execute()
             }
 
             if (!is_gimple_assign(stmt)) {
-#ifdef DEBUG
-                fprintf(stderr, "...skipping non-assign statement\n");
-#endif
+                debug_print("...skipping non-assign statement\n");
                 continue;
             }
 
@@ -415,6 +441,21 @@ static unsigned int find_mv_vars_execute()
 
             }
         }
+
+
+    }
+    if (!split_insn.empty()) {
+        for (gimple insn : split_insn) {
+            //continue;
+            edge e = split_block(insn->bb, insn);
+
+            debug_print("bb: %d, thru: %d (%d -> %d)", insn->bb->index,
+                        e->flags & EDGE_FALLTHRU, e->src->index, e->dest->index);
+            print_gimple_stmt(stdout, insn, 0,0);
+        }
+        /* Since we wildly split basic blocks and insert labels, lets test
+           whether the flow information is still correct */
+        verify_flow_info();
     }
 
 #ifdef DEBUG
