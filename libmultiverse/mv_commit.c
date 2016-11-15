@@ -162,6 +162,7 @@ int multiverse_commit_info_fn(struct mv_info_fn *fn) {
     return ret;
 }
 
+
 int multiverse_commit_fn(void *function_body) {
     struct mv_info_fn *fn = multiverse_info_fn(function_body);
     if (!fn) return -1;

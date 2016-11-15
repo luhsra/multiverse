@@ -1,3 +1,15 @@
+/**
+   @defgroup libmultiverse
+
+   foobar
+*/
+/**
+   @file
+   @brief User API for Multiverse
+   @ingroup libmultiverse
+*/
+
+
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
@@ -93,18 +105,93 @@ void multiverse_dump_info(FILE*);
 struct mv_info_fn  *  multiverse_info_fn(void * function_body);
 struct mv_info_var *  multiverse_info_var(void * variable_location);
 
-/*!
-  \brief Interate over all multiverses and commit the current state
+/**
+  @brief Iterate over all multiverse functions and commit
 
-  \return int
-      >= 0: number of changes functions
-      <  0: an error occured during the operation
+  This function iterates over all functions for which a multiverse
+  exists. It selects the best fitting multiverse instance (mvfn) and
+  installs it as the currently active variant in the code. This
+  installation is done by binary patching of the text segment.
+
+  The function returns the number of changes functions, or -1 on
+  error.
+
+  @return number of changes functions or -1 on error
 */
 int multiverse_commit();
-int multiverse_commit_info_fn(struct mv_info_fn *);
+
+/**
+  @brief commit a single multiverse function
+  @param fn info object identifying the function
+
+  Like multiverse commit, but operates only on a single function. All
+  other functions of the program remain in the current state.
+
+  The function returns the number of changes functions, or -1 on
+  error.
+
+  @return number of changes functions or -1 on error
+  @sa multiverse_commit, multiverse_commit_fn
+*/
+int multiverse_commit_info_fn(struct mv_info_fn *fn);
+
+/**
+  @brief commit a single multiverse function
+  @param function_body the function pointer to the function
+
+  @return number of changed functions or -1 on error
+  @sa multiverse_commit
+
+  Like multiverse commit, but operates only on a single function. All
+  other functions of the program remain in the current state.
+
+  The function returns 1, if a different mvfn was selected. 0 if
+  nothing changes, and -1 on an error.
+
+  @verbatim
+  void __attribute__((multiverse)) foo() {...}
+  ...
+  multiverse_commit_fn(&foo);
+  @endverbatim
+
+*/
 int multiverse_commit_fn(void * function_body);
 
-int multiverse_commit_info_var(struct mv_info_var *);
+/**
+   @brief commit all functions that reference a variable
+   @param var info object referencing the function
+
+   @return number of changed functions or -1 on error
+   @sa multiverse_commit, multiverse_commit_var
+
+   Like multiverse commit, but operates on all functions that
+   reference the given variable.
+
+   The function returns 1, if a different mvfn was selected. 0 if
+   nothing changes, and -1 on an error.
+
+*/
+int multiverse_commit_info_var(struct mv_info_var *var);
+
+/**
+   @brief commit all functions that reference a variable
+   @param var_location pointer to the multiverse variable
+
+   @return number of changed functions or -1 on error
+   @sa multiverse_commit, multiverse_commit_info_var
+
+   Like multiverse commit, but operates on all functions that
+   reference the given variable.
+
+   The function returns 1, if a different mvfn was selected. 0 if
+   nothing changes, and -1 on an error.
+
+   @verbatim
+   int __attribute__((multiverse)) config;
+   ...
+   multiverse_commit_var(&config);
+   @endverbatim
+*/
 int multiverse_commit_var(void * var_location);
 
 
