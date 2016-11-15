@@ -8,7 +8,6 @@ struct mv_info;
 struct mv_info_callsite;
 struct mv_patchpoints;
 
-
 typedef unsigned int mv_value_t;
 
 struct mv_info_assignment {
@@ -51,25 +50,10 @@ struct mv_info_callsite {
     void *call_label;
 };
 
-typedef enum  {
-    PP_TYPE_INVALID,
-    PP_TYPE_X86_CALLQ,
-    PP_TYPE_X86_JUMPQ,
-} mv_info_patchpoint_type;
-
-struct mv_patchpoint {
-    mv_info_patchpoint_type type;
-    struct mv_info_fn *function;
-    void *location;
-};
-
-#define MV_UNINITIALIZED_VARIABLE ((mv_value_t) ~0)
 
 struct mv_info_var_extra {
     unsigned int n_functions;
     struct mv_info_fn **functions;
-
-    mv_value_t materialized_value;
 };
 
 
@@ -106,10 +90,22 @@ int multiverse_init();
 void multiverse_dump_info(FILE*);
 
 
-struct mv_info_fn *   multiverse_info_fn(void * function_body);
+struct mv_info_fn  *  multiverse_info_fn(void * function_body);
 struct mv_info_var *  multiverse_info_var(void * variable_location);
 
-void multiverse_commit_fn(struct mv_info_fn *);
+/*!
+  \brief Interate over all multiverses and commit the current state
+
+  \return int
+      >= 0: number of changes functions
+      <  0: an error occured during the operation
+*/
+int multiverse_commit();
+int multiverse_commit_info_fn(struct mv_info_fn *);
+int multiverse_commit_fn(void * function_body);
+
+int multiverse_commit_info_var(struct mv_info_var *);
+int multiverse_commit_var(void * var_location);
 
 
 #endif

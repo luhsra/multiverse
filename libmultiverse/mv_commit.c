@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
+#include "mv_commit.h"
+
 extern struct mv_info *mv_information;
 
 static mv_value_t multiverse_var_read(struct mv_info_var *var) {
@@ -95,18 +97,16 @@ static int callq_argument(void * callsite, void * callee) {
     return (uintptr_t)callee - ((uintptr_t) callsite + 5);
 }
 
-static void multiverse_select_mvfn(mv_select_ctx_t *ctx,
-                                   struct mv_info_fn *fn,
-                                   struct mv_info_mvfn *mvfn) {
+static int
+multiverse_select_mvfn(mv_select_ctx_t *ctx,
+                       struct mv_info_fn *fn,
+                       struct mv_info_mvfn *mvfn) {
     assert(mvfn != NULL && "Reverting to general implementation not implemented yet");
-    if (mvfn == fn->extra->active_mvfn) return;
+    if (mvfn == fn->extra->active_mvfn) return 0;
 
     char *prologue = fn->function_body;
     multiverse_select_unprotect(ctx, prologue);
     multiverse_select_unprotect(ctx, prologue+5);
-
-
-
 
     for (unsigned i = 0; i < fn->extra->n_patchpoints; i++) {
         struct mv_patchpoint *pp = &fn->extra->patchpoints[i];
@@ -130,9 +130,11 @@ static void multiverse_select_mvfn(mv_select_ctx_t *ctx,
     }
 
     fn->extra->active_mvfn = mvfn;
+
+    return 1; // We changed this function
 }
 
-void __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
+int __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
     struct mv_info_mvfn *best_mvfn = NULL;
 
     for (unsigned f = 0; f < fn->n_mv_functions; f++) {
@@ -148,24 +150,62 @@ void __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
             best_mvfn = mvfn;
         }
     }
-    multiverse_select_mvfn(ctx, fn, best_mvfn);
+    return multiverse_select_mvfn(ctx, fn, best_mvfn);
 }
 
-void multiverse_commit_fn(struct mv_info_fn *fn) {
+int multiverse_commit_info_fn(struct mv_info_fn *fn) {
     mv_select_ctx_t *ctx = multiverse_select_start();
-    assert(ctx != NULL);
-    __multiverse_commit_fn(ctx, fn);
+    if (!ctx) return -1;
+    int ret = __multiverse_commit_fn(ctx, fn);
     multiverse_select_end(ctx);
+
+    return ret;
 }
 
-void multiverse_commit() {
+int multiverse_commit_fn(void *function_body) {
+    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    if (!fn) return -1;
+
+    return multiverse_commit_info_fn(fn);
+}
+
+int multiverse_commit_var_info(struct mv_info_var *var) {
+    int ret = 0;
+    mv_select_ctx_t *ctx = multiverse_select_start();
+    if (!ctx) return -1;
+    for (unsigned f = 0; f < var->extra->n_functions; ++f) {
+        int r = __multiverse_commit_fn(ctx, var->extra->functions[f]);
+        if (r < 0) {
+            ret = -1;
+            break;
+        }
+        ret += r;
+    }
+
+    multiverse_select_end(ctx);
+
+    return ret;
+}
+
+int multiverse_commit_var(void *variable_location) {
+    struct mv_info_var *var = multiverse_info_var(variable_location);
+    if (!var) return -1;
+    return multiverse_commit_var_info(var);
+}
+
+int multiverse_commit() {
+    int ret = 0;
     mv_select_ctx_t *ctx = multiverse_select_start();
     assert(ctx != NULL);
     for (struct mv_info *info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
-            __multiverse_commit_fn(ctx, &info->functions[i]);
+            int r = __multiverse_commit_fn(ctx, &info->functions[i]);
+            if (r < 0) return -1; // FIXME: get a valid state after this
+            ret += r;
         }
     }
 
     multiverse_select_end(ctx);
+
+    return ret;
 }

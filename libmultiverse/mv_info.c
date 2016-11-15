@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "mv_commit.h"
+
 
 struct mv_info *mv_information;
 
@@ -16,7 +18,7 @@ void __multiverse_init(struct mv_info *info) {
 struct mv_info_var *
 multiverse_info_var(void  *variable_location) {
     struct mv_info *info = mv_information;
-    while(info) {
+    for (struct mv_info * info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
             if (var->variable_location == variable_location) return var;
@@ -27,8 +29,7 @@ multiverse_info_var(void  *variable_location) {
 
 struct mv_info_fn *
 multiverse_info_fn(void  *function_body) {
-    struct mv_info *info = mv_information;
-    while(info) {
+    for (struct mv_info * info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn *fn = &info->functions[i];
             if (fn->function_body == function_body) return fn;
@@ -61,8 +62,6 @@ int multiverse_init() {
             struct mv_info_var *var = &info->variables[i];
             var->extra = calloc(1, sizeof(struct mv_info_var_extra));
             if (!var->extra) return -1;
-            // Mark the variable as unitialized
-            var->extra->materialized_value = MV_UNINITIALIZED_VARIABLE;
         }
     }
 

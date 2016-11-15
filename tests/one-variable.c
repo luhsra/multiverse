@@ -36,11 +36,11 @@ int main(int argc, char **argv)
     /* Check the static property of multiverse variants */
     assert(foo() == 0 && config == 0);
 
-    multiverse_commit_fn(foo_info);
+    multiverse_commit_info_fn(foo_info);
 
     assert(foo() == 0 && config == 0);
 
-    config=1;
+    config = 1;
 
     assert(foo() == 0 && config == 1);
 
