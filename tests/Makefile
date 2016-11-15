@@ -5,7 +5,7 @@ PLUGIN=$(PLUGIN_DIR)/multiverse.so
 LIBRARY_DIR=../libmultiverse
 LIBRARY=$(LIBRARY_DIR)/libmultiverse.a
 
-CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -fdump-tree-all
+CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -fdump-tree-all -fdump-rtl-all
 LDFLAGS = -L$(LIBRARY_DIR) -lmultiverse
 
 TEST_SRCS=$(shell echo *.c)
@@ -22,18 +22,21 @@ $(PLUGIN): always
 	make -C $(PLUGIN_DIR)
 
 # Rule for building the binaries
-%: %.o $(LIBRARY)
+%: %.o $(LIBRARY) $(PLUGIN)
 	$(CC)  -o $@ $< $(LDFLAGS)
 
-%.o: %.c $(PLUGIN) testsuite.h
-	$(CC)  -c -o $@ $(CFLAGS)-gdwarf-2  $<
+%.o: %.c $(PLUGIN) $(LIBRARY) testsuite.h
+	$(CC)  -c -o $@ $(CFLAGS) -gdwarf-2  $<
 
-%.S: %.c $(PLUGIN) testsuite.h
+%.S: %.c $(PLUGIN) $(LIBRARY) testsuite.h
 	$(CC)  -S -o $@ $(CFLAGS) $<
 
 clean:
 	rm -f $(TEST_OBJS) $(TEST_ASM) $(TESTS) core
-	find -regex ".*\\.c\\.[0-9]*t\\..*" | xargs rm -f
+	find -regex ".*\\.c\\.[0-9]*[tr]\\..*" | xargs rm -f
+	$(MAKE) -C $(LIBRARY_DIR) clean
+	$(MAKE) -C $(PLUGIN_DIR) clean
+
 
 test: $(foreach x,${TEST_SRCS},$(patsubst %.c,test-%,$x))
 
