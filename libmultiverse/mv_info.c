@@ -109,7 +109,9 @@ int multiverse_init() {
                 cs->type = CS_TYPE_INVALID;
                 cs->call_insn = 0;
             } else {
-                for (unsigned char *p = ((char *) cso->label_after) - 5; p != cso->label_before; p --) {
+                for (char *p = ((char *) cso->label_after) - 5;
+                     p >= (char *)cso->label_before;
+                     p --) {
                     void * addr = p + *(int*)(p + 1) + 5;
                     if (*p == 0xe8 && addr == fn->function_body) {
                         call_insn = p; instances ++;
