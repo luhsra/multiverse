@@ -37,6 +37,16 @@ multiverse_info_fn(void  *function_body) {
     return NULL;
 }
 
+static
+int mv_info_fn_patchpoint_append(struct mv_info_fn *fn, struct mv_patchpoint pp){
+    int n = fn->extra->n_patchpoints;
+    fn->extra->patchpoints = realloc(fn->extra->patchpoints,
+                                     (n + 1) * sizeof(struct mv_patchpoint));
+    if (!fn->extra->patchpoints) return -1; //FIXME: Error
+    fn->extra->patchpoints[fn->extra->n_patchpoints++] = pp;
+    return 0;
+}
+
 int multiverse_init() {
     struct mv_info *info;
 
@@ -61,6 +71,14 @@ int multiverse_init() {
     for (info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn * fn = &info->functions[i];
+
+            // First we install a patchpoint for the beginning of our function body
+            struct mv_patchpoint pp;
+            pp.type = PP_TYPE_X86_JUMPQ;
+            pp.function = fn;
+            pp.location = fn->function_body;
+            mv_info_fn_patchpoint_append(fn, pp);
+
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
@@ -96,44 +114,24 @@ int multiverse_init() {
 
         for (unsigned i = 0; i < info->n_callsites; ++i) {
             struct mv_info_callsite *cs = &info->callsites[i];
-            struct mv_info_callsite_original *cso =
-                (struct mv_info_callsite_original *) cs;
-            struct mv_info_fn *fn = multiverse_info_fn(cso->function_body);
-            cs->function = fn;
+            struct mv_info_fn *fn = multiverse_info_fn(cs->function_body);
             assert(fn && "Function from Callsite could not be resovled");
 
             // Try to find an x86 callq (e8 <offset>
-            void * call_insn = NULL;
-            int instances = 0;
-            if (cso->label_after <= cso->label_before) {
-                cs->type = CS_TYPE_INVALID;
-                cs->call_insn = 0;
+            unsigned char *p = cs->call_label;
+            void * addr = p + *(int*)(p + 1) + 5;
+            if (*p == 0xe8 && addr == fn->function_body) {
+                // Append patchpoint for callq
+                struct mv_patchpoint pp;
+                pp.type = PP_TYPE_X86_CALLQ;
+                pp.function = fn;
+                pp.location = p;
+
+                mv_info_fn_patchpoint_append(fn, pp);
             } else {
-                for (char *p = ((char *) cso->label_after) - 5;
-                     p >= (char *)cso->label_before;
-                     p --) {
-                    void * addr = p + *(int*)(p + 1) + 5;
-                    if (*p == 0xe8 && addr == fn->function_body) {
-                        call_insn = p; instances ++;
-                    }
-                }
-                if (instances == 1) {
-                    cs->type = CS_TYPE_X86_CALLQ;
-                    cs->call_insn = call_insn;
-                } else if (instances == 0) {
-                    cs->type = CS_TYPE_NOTFOUND;
-                    cs->call_insn = NULL;
-                } else if (instances == 0) {
-                    cs->type = CS_TYPE_INVALID;
-                    cs->call_insn = NULL;
-                }
+                fprintf(stderr, "Could not decode callsite at %p for %s [%x, %x, %x, %x, %x]=%lx\n", p,
+                        fn->name, p[0], p[1], p[2], p[3], p[4], addr);
             }
-            /* Add variable to the list of callsites of the function */
-            int n = fn->extra->n_callsites;
-            fn->extra->callsites = realloc(fn->extra->callsites,
-                                           (n + 1) * sizeof(struct mv_info_callsite *));
-            if (!fn->extra->callsites) return -1;
-            fn->extra->callsites[fn->extra->n_callsites++] = cs;
         }
     }
 }
@@ -144,10 +142,10 @@ void multiverse_dump_info(FILE *out) {
         fprintf(out, ", %d functions multiversed\n", info->n_functions);
         for (unsigned i = 0; i < info->n_functions; ++i) {
             struct mv_info_fn * fn = &info->functions[i];
-            fprintf(out, "  fn: %s %p, %d variants, %d callsite(s)\n", fn->name,
+            fprintf(out, "  fn: %s %p, %d variants, %d patchpoints(s)\n", fn->name,
                     fn->function_body,
                     fn->n_mv_functions,
-                    fn->extra->n_callsites);
+                    fn->extra->n_patchpoints);
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
                 // Execute function mv_func();
@@ -162,7 +160,15 @@ void multiverse_dump_info(FILE *out) {
                 }
 
             }
+            for (unsigned i = 0; i < fn->extra->n_patchpoints; ++i) {
+                struct mv_patchpoint *var = &fn->extra->patchpoints[i];
+                fprintf(out, "    patchpoint: [%d:%p] -> %s\n",
+                        var->type,
+                        var->location,
+                        var->function->name);
+            }
         }
+
         fprintf(out, "%d variables were multiversed\n", info->n_variables);
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
@@ -170,15 +176,6 @@ void multiverse_dump_info(FILE *out) {
                     var->variable_location,
                     var->variable_width,
                     var->extra->n_functions);
-        }
-
-        fprintf(out, "%d callsites were recored\n", info->n_callsites);
-        for (unsigned i = 0; i < info->n_callsites; ++i) {
-            struct mv_info_callsite *var = &info->callsites[i];
-            fprintf(out, "  callsite: [%d:%p] -> %s\n",
-                    var->type,
-                    var->call_insn,
-                    var->function->name);
         }
     }
 }

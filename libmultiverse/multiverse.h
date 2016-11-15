@@ -6,6 +6,8 @@ struct mv_info_mvfn;
 struct mv_info_fn;
 struct mv_info;
 struct mv_info_callsite;
+struct mv_patchpoints;
+
 
 typedef unsigned int mv_value_t;
 
@@ -22,8 +24,8 @@ struct mv_info_mvfn {
 };
 
 struct mv_info_fn_extra {
-    unsigned int n_callsites;
-    struct mv_info_callsite **callsites;
+    unsigned int n_patchpoints;
+    struct mv_patchpoint *patchpoints;
     struct mv_info_mvfn *active_mvfn;
 };
 
@@ -44,22 +46,21 @@ struct mv_info_fn {
     };
 };
 
-typedef enum  {
-    CS_TYPE_NOTFOUND,
-    CS_TYPE_INVALID,
-    CS_TYPE_X86_CALLQ,
-} mv_info_callsite_type;
-
-struct mv_info_callsite_original {
+struct mv_info_callsite {
     void *function_body;
-    void *label_before;
-    void *label_after;
+    void *call_label;
 };
 
-struct mv_info_callsite {
+typedef enum  {
+    PP_TYPE_INVALID,
+    PP_TYPE_X86_CALLQ,
+    PP_TYPE_X86_JUMPQ,
+} mv_info_patchpoint_type;
+
+struct mv_patchpoint {
+    mv_info_patchpoint_type type;
     struct mv_info_fn *function;
-    mv_info_callsite_type type;
-    void *call_insn;
+    void *location;
 };
 
 #define MV_UNINITIALIZED_VARIABLE ((mv_value_t) ~0)

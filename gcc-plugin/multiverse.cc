@@ -72,10 +72,6 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
               "or enumeral type", *node, name);
     }
 
-
-
-
-
     return NULL_TREE;
 }
 
@@ -337,7 +333,6 @@ static unsigned int find_mv_vars_execute()
     std::set<tree> mv_vars;
     std::set<tree> mv_blacklist;
     basic_block bb;
-    std::list<gimple> split_insn;
     /* Iterate of each basic block in current function. */
     FOR_EACH_BB_FN(bb, cfun) {
         /* Iterate over each GIMPLE statement. */
@@ -351,67 +346,6 @@ static unsigned int find_mv_vars_execute()
             fprintf(stderr, "---- Checking operands in statement: ");
             // print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
 #endif
-            if (is_gimple_call(stmt)) {
-                tree callee = gimple_call_fndecl(stmt);
-                if (is_multiverse_fn(callee)) {
-                    debug_print("call to multiverse function: ");
-                    print_generic_stmt(stderr, callee, 0);
-                    /* We split this basic block after the call, and
-                       before the call label */
-                    if (last_stmt) {
-                        split_insn.push_back(last_stmt);
-                        /* printf("before: ");
-                           print_gimple_stmt(stdout, split_insn.back(), 0, 0);
-                        */
-                    }
-                    split_insn.push_back(stmt);
-                    /*
-                      printf("after: ");
-                      print_gimple_stmt(stdout, split_insn.back(), 0, 0);
-                    */
-
-
-                    tree label_before = create_artificial_label (UNKNOWN_LOCATION);
-                    gimple g_before = gimple_build_label (label_before);
-                    gsi_insert_before (&gsi, g_before, GSI_SAME_STMT);
-                    tree label_after = create_artificial_label (UNKNOWN_LOCATION);
-                    gimple g_after = gimple_build_label (label_after);
-                    gsi_insert_after (&gsi, g_after, GSI_SAME_STMT);
-                    gsi_next(&gsi);
-
-                    std::stringstream ss;
-                    static unsigned id = 0;
-                    ss << "mv_label." << id++;
-                    std::string before = ss.str();
-                    DECL_NAME(label_before) = get_identifier(before.c_str());
-                    std::string after = before + ".after";
-                    DECL_NAME(label_after) = get_identifier(after.c_str());
-
-
-                    // We mimic to be a user-defined label, in order
-                    // to not get removed on merging of basic blocks.
-                    DECL_ARTIFICIAL(label_before) = 0;
-                    DECL_ARTIFICIAL(label_after) = 0;
-
-                    FORCED_LABEL(label_before) = 1;
-                    FORCED_LABEL(label_after) = 1;
-
-                    TREE_USED(label_before) = 1;
-                    TREE_USED(label_after) = 1;
-
-
-                    // debug_print("before: %d", bb->index);
-                    // print_generic_stmt(stderr, label_before, 0);
-                    // debug_print("after: ");
-                    // print_generic_stmt(stderr, label_after, 0);
-
-                    mv_info_callsite_data callsite;
-                    callsite.fn_decl = callee;
-                    callsite.label_before = label_before;
-                    callsite.label_after = label_after;
-                    mv_info_ctx.callsites.push_back(callsite);
-                }
-            }
 
             if (!is_gimple_assign(stmt)) {
                 debug_print("...skipping non-assign statement\n");
@@ -455,19 +389,6 @@ static unsigned int find_mv_vars_execute()
         }
 
 
-    }
-    if (!split_insn.empty()) {
-        for (gimple insn : split_insn) {
-            //continue;
-            edge e = split_block(insn->bb, insn);
-
-            debug_print("bb: %d, thru: %d (%d -> %d)", insn->bb->index,
-                        e->flags & EDGE_FALLTHRU, e->src->index, e->dest->index);
-            print_gimple_stmt(stdout, insn, 0,0);
-        }
-        /* Since we wildly split basic blocks and insert labels, lets test
-           whether the flow information is still correct */
-        verify_flow_info();
     }
 
 #ifdef DEBUG
@@ -521,6 +442,58 @@ static unsigned int find_mv_vars_execute()
 #include "gcc-generate-gimple-pass.h"
 
 /*
+ * Pass to find call instructions in the RTL that references a
+ * multiverse function. For such callsites, we insert a label and
+ * record it for the mv_info.
+ */
+static unsigned int find_mv_callsites_execute()
+{
+    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
+    // debug_print("rtl: %p %s\n", cfun, fname.c_str());
+    basic_block b;
+    rtx_insn *insn;
+    FOR_EACH_BB_FN (b, cfun) {
+        FOR_BB_INSNS (b, insn) {
+            rtx call;
+            if (CALL_P(insn) && (call = get_call_rtx_from(insn))) {
+                tree decl = SYMBOL_REF_DECL (XEXP(XEXP(call,0), 0));
+                if (!decl) continue;
+                if (!is_multiverse_fn(decl)) continue;
+
+                // debug_print("mv-call: %p\n", call);
+                // print_rtl(stderr, call);
+                // print_generic_stmt(stderr, decl, 0);
+
+                // We have to insert a label before the code
+                tree tree_label = create_artificial_label (UNKNOWN_LOCATION);
+                rtx label = jump_target_rtx (tree_label);
+                LABEL_NUSES(label) = 1;
+                emit_label_before (label, insn);
+
+                // Sonce jump_target_rtx emits a code_label, which is
+                // not allowed within a basic block, we transform it
+                // to a NOTE_INSN_DELETEC_LABEL
+                PUT_CODE (label, NOTE);
+                NOTE_KIND (label) = NOTE_INSN_DELETED_LABEL;
+
+                mv_info_callsite_data callsite;
+                callsite.fn_decl = decl;
+                callsite.callsite_label = tree_label;
+                mv_info_ctx.callsites.push_back(callsite);
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+#define PASS_NAME find_mv_callsites
+#define NO_GATE
+#include "gcc-generate-rtl-pass.h"
+
+
+/*
  * Initialization function of this plugin: the very heart & soul.
  */
 int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *version)
@@ -531,6 +504,8 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
 
     const char * plugin_name = info->base_name;
     struct register_pass_info find_mv_vars_info;
+    struct register_pass_info find_mv_callsites_info;
+
 
     if (!plugin_default_version_check(version, &gcc_version)) {
         error(G_("incompatible gcc/plugin versions"));
@@ -552,6 +527,13 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     find_mv_vars_info.ref_pass_instance_number = 0;
     find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
+
+    // register the multiverse RTL pass
+    find_mv_callsites_info.pass = make_find_mv_callsites_pass();
+    find_mv_callsites_info.reference_pass_name = "final";
+    find_mv_callsites_info.ref_pass_instance_number = 0;
+    find_mv_callsites_info.pos_op = PASS_POS_INSERT_BEFORE; // BEFORE => no assembly yet
+    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_callsites_info);
 
     // Finish off the generation of multiverse info
     register_callback(plugin_name, PLUGIN_FINISH_UNIT, mv_info_finish, &mv_info_ctx);

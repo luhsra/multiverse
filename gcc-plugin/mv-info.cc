@@ -339,8 +339,7 @@ static void build_info_callsite_type(tree info_var_type)
     /*
       struct __mv_info_callsite {
         void * callee;
-        void * label_before;
-        void * label_after;
+        void * callsite_label;
       };
     */
     tree field, fields = NULL_TREE;
@@ -349,9 +348,6 @@ static void build_info_callsite_type(tree info_var_type)
     RECORD_FIELD(build_pointer_type (void_type_node));
 
     /* label_before */
-    RECORD_FIELD(build_pointer_type (void_type_node));
-
-    /* label_after */
     RECORD_FIELD(build_pointer_type (void_type_node));
 
     finish_builtin_struct(info_var_type, "__mv_info_callsite", fields, NULL_TREE);
@@ -368,16 +364,10 @@ static tree build_info_callsite(mv_info_callsite_data &cs_info, mv_info_ctx_t *c
                                   cs_info.fn_decl));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* label_before */
+    /* label */
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR, TREE_TYPE(info_fields),
-                                  cs_info.label_before));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* label_after */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, TREE_TYPE(info_fields),
-                                  cs_info.label_after));
+                                  cs_info.callsite_label));
     info_fields = DECL_CHAIN(info_fields);
 
     gcc_assert(!info_fields); // All fields are filled
@@ -523,7 +513,7 @@ static void build_types(mv_info_ctx_t *t)
     t->var_ptr_type = build_pointer_type(t->var_type);
     t->mvfn_ptr_type = build_pointer_type(t->mvfn_type);
     t->assignment_ptr_type = build_pointer_type(t->assignment_type);
-    t->callsite_ptr_type = build_pointer_type(t->assignment_type);
+    t->callsite_ptr_type = build_pointer_type(t->callsite_type);
 
 
     build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type, t->callsite_ptr_type);

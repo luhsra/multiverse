@@ -105,20 +105,28 @@ static void multiverse_select_mvfn(mv_select_ctx_t *ctx,
     multiverse_select_unprotect(ctx, prologue);
     multiverse_select_unprotect(ctx, prologue+5);
 
-    prologue[0] = 0xe9;
-    *((int *)&prologue[1]) = callq_argument(prologue, mvfn->function_body);
-    __clear_cache(prologue, prologue+5);
-    printf("patch %p: jmp %p\n", prologue, mvfn->function_body);
 
 
-    for (unsigned i = 0; i < fn->extra->n_callsites; i++) {
-        char *call = fn->extra->callsites[i]->call_insn;
-        if (!call) continue;
-        multiverse_select_unprotect(ctx, call);
-        multiverse_select_unprotect(ctx, call+5);
-        *((int *)&call[1]) = callq_argument(call, mvfn->function_body);
-        __clear_cache(call, call+5);
-        printf("patch %p: call %p\n", call, mvfn->function_body);
+
+    for (unsigned i = 0; i < fn->extra->n_patchpoints; i++) {
+        struct mv_patchpoint *pp = &fn->extra->patchpoints[i];
+        unsigned char *location = pp->location;
+        if (pp->type == PP_TYPE_INVALID) continue;
+        if (!location) continue;
+        multiverse_select_unprotect(ctx, location);
+        multiverse_select_unprotect(ctx, location+5);
+
+        if (pp->type == PP_TYPE_X86_CALLQ) {
+            printf("patch %p: call %p\n", location, mvfn->function_body);
+            location[0] = 0xe8;
+        } else if (pp->type == PP_TYPE_X86_JUMPQ) {
+            printf("patch %p: jump %p\n", location, mvfn->function_body);
+            location[0] = 0xe9;
+        }
+
+        *((int *)&location[1]) = callq_argument(location, mvfn->function_body);
+        __clear_cache(location, location+5);
+
     }
 
     fn->extra->active_mvfn = mvfn;

@@ -28,10 +28,8 @@ struct mv_info_fn_data {
 
 struct mv_info_callsite_data {
     tree fn_decl;			 /* the function decl */
-    tree label_before, label_after;
+    tree callsite_label;
 };
-
-
 
 struct mv_info_var_data {
     tree var_decl;			 /* the multiverse variable decl */
