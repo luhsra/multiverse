@@ -195,4 +195,69 @@ int multiverse_commit_info_var(struct mv_info_var *var);
 int multiverse_commit_var(void * var_location);
 
 
+
+
+/**
+   @brief commit a single multiverse function
+   @param fn info object identifying the function
+
+   @return number of changes functions or -1 on error
+   @sa multiverse_commit, multiverse_commit_fn
+*/
+
+int multiverse_revert_info_fn(struct mv_info_fn* fn);
+
+/**
+   @brief Revert multiverse code modifications for one function
+   @param function_body pointer to the function body
+
+   Calling this function reverts all code modification that were done
+   on the given function.
+
+   @return number of changes or -1 on error
+*/
+int multiverse_revert_fn(void* function_body);
+
+
+/**
+   @brief commit all functions that reference a variable
+   @param var info object referencing the function
+
+   @return number of changed functions or -1 on error
+   @sa multiverse_revert, multiverse_revert_var
+
+   Like multiverse_revert, but operates on all functions that
+   reference the given variable.
+
+   The function returns 1, if a different mvfn was selected. 0 if
+   nothing changes, and -1 on an error.
+
+*/
+int multiverse_revert_info_var(struct mv_info_var *var);
+
+/**
+   @brief commit all functions that reference a variable
+   @param var_location pointer to the multiverse variable
+
+   @return number of changed functions or -1 on error
+   @sa multiverse_revert, multiverse_revert_info_var
+
+   Like multiverse_revert, but operates on all functions that
+   reference the given variable.
+
+   The function returns 1, if a different mvfn was selected. 0 if
+   nothing changes, and -1 on an error.
+
+*/
+int multiverse_revert_var(void * var_location);
+
+/**
+   @brief Revert all multiverse code modifications
+
+   Calling this function reverts all code modification that were done
+   to all multiversed variables.
+
+   @return number of changes functions or -1 on error
+*/
+int multiverse_revert();
 #endif

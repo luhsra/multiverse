@@ -5,7 +5,7 @@ PLUGIN=$(PLUGIN_DIR)/multiverse.so
 LIBRARY_DIR=../libmultiverse
 LIBRARY=$(LIBRARY_DIR)/libmultiverse.a
 
-CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -fdump-tree-all -fdump-rtl-all
+CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -fdump-tree-optimized -fdump-rtl-final
 LDFLAGS = -L$(LIBRARY_DIR) -lmultiverse
 
 TEST_SRCS=$(shell echo *.c)

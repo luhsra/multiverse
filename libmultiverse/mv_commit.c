@@ -101,12 +101,7 @@ static int
 multiverse_select_mvfn(mv_select_ctx_t *ctx,
                        struct mv_info_fn *fn,
                        struct mv_info_mvfn *mvfn) {
-    assert(mvfn != NULL && "Reverting to general implementation not implemented yet");
     if (mvfn == fn->extra->active_mvfn) return 0;
-
-    char *prologue = fn->function_body;
-    multiverse_select_unprotect(ctx, prologue);
-    multiverse_select_unprotect(ctx, prologue+5);
 
     for (unsigned i = 0; i < fn->extra->n_patchpoints; i++) {
         struct mv_patchpoint *pp = &fn->extra->patchpoints[i];
@@ -116,15 +111,28 @@ multiverse_select_mvfn(mv_select_ctx_t *ctx,
         multiverse_select_unprotect(ctx, location);
         multiverse_select_unprotect(ctx, location+5);
 
-        if (pp->type == PP_TYPE_X86_CALLQ) {
-            printf("patch %p: call %p\n", location, mvfn->function_body);
-            location[0] = 0xe8;
-        } else if (pp->type == PP_TYPE_X86_JUMPQ) {
-            printf("patch %p: jump %p\n", location, mvfn->function_body);
-            location[0] = 0xe9;
+        // Select from original -> Swap out the current code
+        if (fn->extra->active_mvfn == NULL) {
+            memcpy(&pp->swapspace[0], location, 5);
         }
+        if (mvfn == NULL) {
+            // Revert to original state
+            memcpy(location, &pp->swapspace[0], 5);
+            printf("patch %p: original\n", location);
+        } else {
+            // patch the code segment according to the patchpoint definition
 
-        *((int *)&location[1]) = callq_argument(location, mvfn->function_body);
+            if (pp->type == PP_TYPE_X86_CALLQ) {
+                printf("patch %p: call %p\n", location, mvfn->function_body);
+                location[0] = 0xe8;
+            } else if (pp->type == PP_TYPE_X86_JUMPQ) {
+                printf("patch %p: jump %p\n", location, mvfn->function_body);
+                location[0] = 0xe9;
+            }
+
+            *((uint32_t *)&location[1]) = callq_argument(location, mvfn->function_body);
+        }
+        // In all cases: Clear the cache afterwards.
         __clear_cache(location, location+5);
 
     }
@@ -197,11 +205,78 @@ int multiverse_commit_var(void *variable_location) {
 int multiverse_commit() {
     int ret = 0;
     mv_select_ctx_t *ctx = multiverse_select_start();
-    assert(ctx != NULL);
+    if (!ctx) return -1;
     for (struct mv_info *info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
             int r = __multiverse_commit_fn(ctx, &info->functions[i]);
-            if (r < 0) return -1; // FIXME: get a valid state after this
+            if (r < 0) {
+                ret = -1;
+                break; // FIXME: get a valid state after this
+            }
+            ret += r;
+        }
+    }
+
+    multiverse_select_end(ctx);
+
+    return ret;
+}
+
+int multiverse_revert_info_fn(struct mv_info_fn *fn) {
+    mv_select_ctx_t *ctx = multiverse_select_start();
+    if (!ctx) return -1;
+
+    int ret = multiverse_select_mvfn(ctx,  fn, NULL);
+
+    multiverse_select_end(ctx);
+    return ret;
+}
+
+
+int multiverse_revert_fn(void *function_body) {
+    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    if (!fn) return -1;
+
+    return multiverse_revert_info_fn(fn);
+}
+
+int multiverse_revert_var_info(struct mv_info_var *var) {
+    int ret = 0;
+    mv_select_ctx_t *ctx = multiverse_select_start();
+    if (!ctx) return -1;
+    for (unsigned f = 0; f < var->extra->n_functions; ++f) {
+        int r = multiverse_select_mvfn(ctx, var->extra->functions[f], NULL);
+        if (r < 0) {
+            ret = -1;
+            break;
+        }
+        ret += r;
+    }
+
+    multiverse_select_end(ctx);
+
+    return ret;
+}
+
+int multiverse_revert_var(void *variable_location) {
+    struct mv_info_var *var = multiverse_info_var(variable_location);
+    if (!var) return -1;
+    return multiverse_revert_var_info(var);
+}
+
+
+int multiverse_revert() {
+    int ret = 0;
+    mv_select_ctx_t *ctx = multiverse_select_start();
+    if (!ctx) return -1;
+
+    for (struct mv_info *info = mv_information; info; info = info->next) {
+        for (unsigned i = 0; i < info->n_functions; ++i) {
+            int r = multiverse_select_mvfn(ctx,  &info->functions[i], NULL);
+            if (r < 0) {
+                r = -1;
+                break;
+            }
             ret += r;
         }
     }
