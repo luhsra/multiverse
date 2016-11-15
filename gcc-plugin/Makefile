@@ -8,7 +8,7 @@ HOST_GCC=g++
 TARGET_GCC=gcc
 PLUGIN= multiverse
 GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
-CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -DDEBUG=1
+CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -DDEBUG=1 -gdwarf-2
 
 all: $(PLUGIN).so
 

@@ -379,17 +379,29 @@ static unsigned int find_mv_vars_execute()
                     gsi_insert_after (&gsi, g_after, GSI_SAME_STMT);
                     gsi_next(&gsi);
 
+                    std::stringstream ss;
+                    static unsigned id = 0;
+                    ss << "mv_label." << id++;
+                    std::string before = ss.str();
+                    DECL_NAME(label_before) = get_identifier(before.c_str());
+                    std::string after = before + ".after";
+                    DECL_NAME(label_after) = get_identifier(after.c_str());
+
+
                     // We mimic to be a user-defined label, in order
                     // to not get removed on merging of basic blocks.
-                    FORCED_LABEL(label_before) = 1;
-                    FORCED_LABEL(label_after) = 1;
                     DECL_ARTIFICIAL(label_before) = 0;
                     DECL_ARTIFICIAL(label_after) = 0;
 
+                    FORCED_LABEL(label_before) = 1;
+                    FORCED_LABEL(label_after) = 1;
+
+                    TREE_USED(label_before) = 1;
+                    TREE_USED(label_after) = 1;
 
 
-                    //debug_print("before: %d", bb->index);
-                    //print_generic_stmt(stderr, label_before, 0);
+                    // debug_print("before: %d", bb->index);
+                    // print_generic_stmt(stderr, label_before, 0);
                     // debug_print("after: ");
                     // print_generic_stmt(stderr, label_after, 0);
 
