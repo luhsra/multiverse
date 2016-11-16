@@ -17,17 +17,20 @@
  *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
  */
 
-#include "gcc-common.h"
-#include "mv-info.h"
-#include "multiverse.h"
-
-
 #include <bitset>
 #include <list>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
+#include <algorithm>
+#include <assert.h>
+
+#include "gcc-common.h"
+#include "mv-info.h"
+#include "multiverse.h"
+
+
 
 #define MV_SUFFIX ".multiverse"
 
@@ -266,6 +269,7 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
     clone = clone_fndecl(fndecl, fname);
     gcc_assert(clone != fndecl);
 
+    // WTF is this doing.
     clone_func = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_func);
     mv_info_mvfn_data mvfn;
@@ -283,6 +287,10 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
         mvfn.assignments.push_back(assign);
     }
     fn_info.mv_functions.push_back(mvfn);
+
+
+    DECL_ATTRIBUTES(cfun->decl) =
+        remove_attribute("multiverse", DECL_ATTRIBUTES(cfun->decl));
 
     pop_cfun();
 
@@ -442,6 +450,79 @@ static unsigned int find_mv_vars_execute()
 #include "gcc-generate-gimple-pass.h"
 
 /*
+ */
+static unsigned int mv_variant_elimination_execute() {
+    using namespace ipa_icf;
+
+    debug_print("IPA\n");
+
+    bitmap_obstack bmstack;
+    bitmap_obstack_initialize(&bmstack);
+
+    for (auto &fn_info : mv_info_ctx.functions) {
+        std::list<std::list<std::pair<mv_info_mvfn_data*, sem_function *>>> classes;
+        hash_map <symtab_node *, sem_item *> ignored_nodes;
+        for (auto &mvfn_info : fn_info.mv_functions) {
+            cgraph_node *node = get_fn_cnode(mvfn_info.mvfn_decl);
+            sem_function *func = new sem_function(node, 0, &bmstack);
+            func->init();
+
+            std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(mvfn_info.mvfn_decl));
+            debug_print("%s ", fname.c_str());
+
+            bool found = false;
+            for (auto &ec : classes) {
+                bool eq = ec.front().second->equals(func, ignored_nodes);
+                if (eq) {
+                    debug_print("EQ\n");
+                    ec.push_back({&mvfn_info, func});
+                    found = true;
+                    break;
+                }
+            }
+            // None found? Start a new one!
+            if (!found) {
+                debug_print("NEQ\n");
+                classes.push_back({{&mvfn_info,func}});
+            }
+        }
+        for (auto &ec : classes) {
+            /* If multiple multiverse functions are equivalent. Let
+               them all point to the same function body. */
+            if (ec.size() > 1) {
+                auto first = ec.front();
+                ec.pop_front();
+                for (const auto &other: ec) {
+                    // Mark all others as disposable
+                    cgraph_node *other_node = get_fn_cnode(other.second->decl);
+                    other_node->externally_visible = false;
+                    other_node->make_local();
+
+                    // We reference the one variant that is not removed.
+                    other.first->mvfn_decl = first.first->mvfn_decl;
+                }
+                ec.push_front(first);
+            }
+            debug_print("found equivalence class of size %d\n", ec.size());
+        }
+        // Cleanup of sem_function *
+        for (const auto &ec : classes) {
+            for (const auto &item : ec) {
+                delete item.second;
+            }
+        }
+    }
+
+    bitmap_obstack_release(&bmstack);
+
+    return TODO_remove_functions;
+}
+
+#define PASS_NAME mv_variant_elimination
+#define NO_GATE
+#include "gcc-generate-simple_ipa-pass.h"
+
+/*
  * Pass to find call instructions in the RTL that references a
  * multiverse function. For such callsites, we insert a label and
  * record it for the mv_info.
@@ -505,6 +586,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     const char * plugin_name = info->base_name;
     struct register_pass_info find_mv_vars_info;
     struct register_pass_info find_mv_callsites_info;
+    struct register_pass_info mv_variant_elimination_info;
 
 
     if (!plugin_default_version_check(version, &gcc_version)) {
@@ -521,12 +603,19 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     // register the multiverse attribute
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
 
-    // register the multiverse GIMPLE pass
+    // register pass: generate multiverse variants
     find_mv_vars_info.pass = make_find_mv_vars_pass();
-    find_mv_vars_info.reference_pass_name = "early_optimizations";
+    find_mv_vars_info.reference_pass_name = "ssa";
     find_mv_vars_info.ref_pass_instance_number = 0;
     find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
+
+    // register pass: eliminate duplicated variants
+    mv_variant_elimination_info.pass = make_mv_variant_elimination_pass();
+    mv_variant_elimination_info.reference_pass_name = "opt_local_passes";
+    mv_variant_elimination_info.ref_pass_instance_number = 0;
+    mv_variant_elimination_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
+    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_elimination_info);
 
     // register the multiverse RTL pass
     find_mv_callsites_info.pass = make_find_mv_callsites_pass();

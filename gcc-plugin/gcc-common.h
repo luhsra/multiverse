@@ -113,6 +113,11 @@
 #include "builtins.h"
 #endif
 
+#include <list>
+#include "ipa-icf-gimple.h"
+#include "ipa-icf.h"
+
+
 /* #include "expr.h" where are you... */
 extern rtx emit_move_insn(rtx x, rtx y);
 
