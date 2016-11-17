@@ -5,7 +5,7 @@ PLUGIN=$(PLUGIN_DIR)/multiverse.so
 LIBRARY_DIR=../libmultiverse
 LIBRARY=$(LIBRARY_DIR)/libmultiverse.a
 
-CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -fdump-tree-optimized -fdump-ipa-all
+CFLAGS = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -fdump-tree-optimized -fdump-ipa-all -fdump-tree-all -fdump-rtl-final
 LDFLAGS = -L$(LIBRARY_DIR) -lmultiverse
 
 TEST_SRCS=$(shell echo *.c)
@@ -33,7 +33,7 @@ $(PLUGIN): always
 
 clean:
 	rm -f $(TEST_OBJS) $(TEST_ASM) $(TESTS) core
-	find -regex ".*\\.c\\.[0-9]*[tr]\\..*" | xargs rm -f
+	find -regex ".*\\.c\\.[0-9]*[tri]\\..*" | xargs rm -f
 	$(MAKE) -C $(LIBRARY_DIR) clean
 	$(MAKE) -C $(PLUGIN_DIR) clean
 

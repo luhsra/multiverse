@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <memory.h>
 
 #include "mv_commit.h"
 
@@ -284,4 +285,9 @@ int multiverse_revert() {
     multiverse_select_end(ctx);
 
     return ret;
+}
+
+int multiverse_is_committed(void *function_body) {
+    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    return fn->extra->active_mvfn != NULL;
 }

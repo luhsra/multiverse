@@ -260,4 +260,16 @@ int multiverse_revert_var(void * var_location);
    @return number of changes functions or -1 on error
 */
 int multiverse_revert();
+
+/**
+   @brief Test wheter a function is currently committed to a mulitverse varian.
+   @param function_body pointer to the function body
+
+   Test wheter the function body of a function is currently under the
+   control of multiverse.
+
+   @return bool
+*/
+int multiverse_is_committed(void* function_body);
+
 #endif
