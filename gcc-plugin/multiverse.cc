@@ -22,6 +22,8 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <vector>
+
 #include <string>
 #include <algorithm>
 #include <assert.h>
@@ -68,7 +70,14 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         }
     } else if (type == FUNCTION_TYPE) {
         // A function was declared as a multiversed function.
-        // Everything is fine.
+        // Everything is fine. We mark the function as unclonable to
+        // avoid all kind of nasty bugs. (function splitting)
+        // Furthermore, we mark the function explicitly as
+        // uninlinable.
+        DECL_ATTRIBUTES(*node) = tree_cons(get_identifier("noclone"), NULL,
+                                           tree_cons(get_identifier("noinline"), NULL,
+                                                     DECL_ATTRIBUTES(*node)));
+        DECL_UNINLINABLE(*node) = 1;
     } else {
         // FIXME: Error message for functions
         error("variable %qD with %qE attribute must be an integer "
@@ -281,6 +290,7 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
 
         // Save the information about the assignment
         mv_info_assignment_data assign;
+        assign.var_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(var));
         assign.var_decl = var;
         assign.lower_limit = val;
         assign.upper_limit = val;
@@ -449,32 +459,108 @@ static unsigned int find_mv_vars_execute()
 #define NO_GATE
 #include "gcc-generate-gimple-pass.h"
 
+typedef std::vector<
+    std::pair<mv_info_mvfn_data*,
+              ipa_icf::sem_function *>> equivalence_class;
+
+// For two assignment maps, we test if they differ only in one
+// variable assignment. If they differ, we furthermore test, wheter
+// their intervals are next to each other. In this case, we merge b
+// into a, and say: yes, we merged something here.
+static bool
+merge_if_possible(std::vector<mv_info_assignment_data> &a,
+                     std::vector<mv_info_assignment_data> &b) {
+    if (a.size() != b.size()) return false;
+
+    unsigned differences = 0, idx = 0;
+    bool compatible = false;
+    unsigned lower, upper;
+    for (unsigned i = 0; i < a.size() ; i++) {
+        assert(a[i].var_decl == b[i].var_decl);
+        if (a[i].lower_limit == b[i].lower_limit
+            && a[i].upper_limit == b[i].upper_limit)
+            continue;
+        differences ++;
+        if (a[i].lower_limit == (b[i].upper_limit-1)
+            || b[i].lower_limit == (a[i].upper_limit +1)) {
+            idx = i;
+            lower = std::min(a[i].lower_limit, b[i].lower_limit);
+            upper = std::max(a[i].upper_limit, b[i].upper_limit);
+            compatible = true;
+        }
+    }
+    if (differences == 1 && compatible) {
+        a[idx].lower_limit = lower;
+        a[idx].upper_limit = upper;
+        return true;
+    }
+    return false;
+}
+
+/* In a mvfn selector equivalence class, all selectors point to the
+   same mvfn function body. Nevertheless, their guarding assignment
+   maps may be different. In some cases, we can reduce the number of
+   descriptors, by merging their intervals. */
+static
+int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
+                         equivalence_class &ec) {
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        // We want to merge b into a if possible
+        for (unsigned a = 0; a < ec.size(); a++) {
+            for (unsigned b = a+1; b < ec.size(); b++) {
+                ec[a].first->dump(stderr); debug_print("\n");
+                ec[b].first->dump(stderr); debug_print("\n");
+                bool merged = merge_if_possible(ec[a].first->assignments,
+                                                ec[b].first->assignments);
+                if (merged) {
+                    // debug_print("  Merged! "); ec[a].first->dump(stderr); debug_print("\n");
+                    changed = true;
+                    // Remove from the global list of mvfn_function descriptors
+                    for (auto it = fn_info.mv_functions.begin();
+                         it != fn_info.mv_functions.end(); it++) {
+                        if (&*it == ec[b].first) {
+                            fn_info.mv_functions.erase(it);
+                            break;
+                        }
+                    }
+                    // Remove second mvfn descriptor
+                    delete ec[b].second; // sem_function *
+                    ec.erase(ec.begin() + b);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 /*
  */
 static unsigned int mv_variant_elimination_execute() {
     using namespace ipa_icf;
 
-    debug_print("IPA\n");
+    debug_print("IPA: mv variant_elimination\n");
 
     bitmap_obstack bmstack;
     bitmap_obstack_initialize(&bmstack);
 
     for (auto &fn_info : mv_info_ctx.functions) {
-        std::list<std::list<std::pair<mv_info_mvfn_data*, sem_function *>>> classes;
+        std::list<equivalence_class> classes;
         hash_map <symtab_node *, sem_item *> ignored_nodes;
         for (auto &mvfn_info : fn_info.mv_functions) {
             cgraph_node *node = get_fn_cnode(mvfn_info.mvfn_decl);
             sem_function *func = new sem_function(node, 0, &bmstack);
             func->init();
 
-            std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(mvfn_info.mvfn_decl));
-            debug_print("%s ", fname.c_str());
+            // std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(mvfn_info.mvfn_decl));
+            // debug_print("%s ", fname.c_str());
 
             bool found = false;
             for (auto &ec : classes) {
                 bool eq = ec.front().second->equals(func, ignored_nodes);
                 if (eq) {
-                    debug_print("EQ\n");
+                    //     debug_print("EQ\n");
                     ec.push_back({&mvfn_info, func});
                     found = true;
                     break;
@@ -482,17 +568,19 @@ static unsigned int mv_variant_elimination_execute() {
             }
             // None found? Start a new one!
             if (!found) {
-                debug_print("NEQ\n");
+                // debug_print("NEQ\n");
                 classes.push_back({{&mvfn_info,func}});
             }
         }
         for (auto &ec : classes) {
+            debug_print("found equivalence class of size %d\n", ec.size());
             /* If multiple multiverse functions are equivalent. Let
                them all point to the same function body. */
             if (ec.size() > 1) {
-                auto first = ec.front();
-                ec.pop_front();
-                for (const auto &other: ec) {
+                // The first in the equivalence class is our representant
+                auto &first = ec[0];
+                for (unsigned i = 1; i < ec.size(); i++) {
+                    auto &other = ec[i];
                     // Mark all others as disposable
                     cgraph_node *other_node = get_fn_cnode(other.second->decl);
                     other_node->externally_visible = false;
@@ -501,9 +589,13 @@ static unsigned int mv_variant_elimination_execute() {
                     // We reference the one variant that is not removed.
                     other.first->mvfn_decl = first.first->mvfn_decl;
                 }
-                ec.push_front(first);
+                // Merge equivalence classes of selektors
+                // Think of the following situation:
+                // ec = [(a=0, b=0), (a=0, b=1), (a=1, b=0)]
+                // Then it would be sufficient to expose the following terms
+                merge_mvfn_selectors(fn_info, ec);
+                debug_print(".. reduced to size %d\n", ec.size());
             }
-            debug_print("found equivalence class of size %d\n", ec.size());
         }
         // Cleanup of sem_function *
         for (const auto &ec : classes) {

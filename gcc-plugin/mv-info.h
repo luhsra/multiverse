@@ -3,10 +3,13 @@
 
 #include "gcc-common.h"
 #include <list>
+#include <vector>
+
 
 #define MV_VERSION 42
 
 struct mv_info_assignment_data {
+    const char *var_name;
     tree var_decl;
     unsigned lower_limit;
     unsigned upper_limit;
@@ -17,7 +20,18 @@ struct mv_info_fn_data;
 
 struct mv_info_mvfn_data {
     tree mvfn_decl;
-    std::list<mv_info_assignment_data> assignments;
+    std::vector<mv_info_assignment_data> assignments;
+
+    void dump(FILE *out) {
+        fprintf(out, "mvfn:%s[", IDENTIFIER_POINTER(DECL_NAME(mvfn_decl)));
+        for (auto & a : assignments) {
+            fprintf(out, "%s=[%d,%d],",
+                    IDENTIFIER_POINTER(DECL_NAME(a.var_decl)),
+                    a.lower_limit, a.upper_limit);
+
+        }
+    }
+
 };
 
 

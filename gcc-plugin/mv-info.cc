@@ -40,8 +40,8 @@ static tree build_var(tree type, std::string prefix)
 }
 
 
-template<typename T>
-static tree build_array_from_list(std::list<T> &elements,
+template<typename Seq, typename T>
+static tree build_array_from_list(Seq &elements,
                                   tree element_type,
                                   tree (*build_obj_ptr)(T&, mv_info_ctx_t*),
                                   mv_info_ctx_t *ctx)
