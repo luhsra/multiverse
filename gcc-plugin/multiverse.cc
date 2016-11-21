@@ -252,8 +252,11 @@ static void multiverse_function(mv_info_fn_data &fn_info,
     std::stringstream ss;
     for (mv_variant_generator::dimension_value &val : assignment) {
         // Append variable assignments to the clone's name
-        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(val.variable))
-           << val.value_label;
+        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(val.variable));
+        if (val.value_label)
+            ss << val.value_label;
+        else
+            ss << val.value;
     }
     fname += ".multiverse.";
     fname += ss.str().substr(1);
@@ -393,6 +396,8 @@ static unsigned int mv_variant_generation_execute()
     bool is_attributed_mv = is_multiverse_fn(cfun->decl);
 
     std::set<tree> mv_vars;
+    std::map<tree, std::set<unsigned HOST_WIDE_INT>> mv_var_hints;
+
     std::set<tree> mv_blacklist;
     basic_block bb;
     /* Iterate of each basic block in current function. */
@@ -440,6 +445,34 @@ static unsigned int mv_variant_generation_execute()
                     fprintf(dump_file, "found multiverse operand: ");
                     print_generic_stmt(dump_file, var, 0);
                 }
+                if (gimple_num_ops(stmt) == 2 && TREE_CODE(TREE_TYPE(var)) == INTEGER_TYPE) {
+                    // We can try to guess the value
+                    fprintf(stderr, "guess!");
+                    tree local_var = gimple_op(stmt, 0);
+                    gimple use_stmt;
+                    imm_use_iterator imm_iter;
+                    FOR_EACH_IMM_USE_STMT(use_stmt, imm_iter, local_var) {
+                        if (gimple_code(use_stmt) == GIMPLE_COND
+                            && gimple_cond_code(use_stmt) == EQ_EXPR) {
+                            tree comparand;
+                            if (gimple_op(use_stmt, 0) == local_var)
+                                comparand = gimple_op(use_stmt, 1);
+                            else if (gimple_op(use_stmt, 1) == local_var)
+                                comparand = gimple_op(use_stmt, 0);
+                            else
+                                assert(false && "Could not find variable in comparision");
+
+                            if (!CONSTANT_CLASS_P(comparand)) continue;
+
+                            unsigned HOST_WIDE_INT constant = int_cst_value(comparand);
+                            if (mv_var_hints.find(var) == mv_var_hints.end()) {
+                                mv_var_hints[var] = {constant};
+                            } else {
+                                mv_var_hints[var].insert(constant);
+                            }
+                        }
+                    }
+                }
                 mv_vars.insert(var);
             }
         }
@@ -478,8 +511,14 @@ static unsigned int mv_variant_generation_execute()
             }
         } else if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
             generator.add_dimension(variable);
-            generator.add_dimension_value(variable, "0", 0, 0);
-            generator.add_dimension_value(variable, "1", 1, 0);
+            if (mv_var_hints.find(variable) != mv_var_hints.end()) {
+                for (auto val : mv_var_hints[variable]) {
+                    generator.add_dimension_value(variable, NULL, val, 0);
+                }
+            } else {
+                generator.add_dimension_value(variable, NULL, 0, 0);
+                generator.add_dimension_value(variable, NULL, 1, 0);
+            }
         }
     }
 
