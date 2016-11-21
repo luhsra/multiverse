@@ -36,14 +36,19 @@
 
 #define MV_SUFFIX ".multiverse"
 
-
 int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "42" };
 
 static mv_info_ctx_t mv_info_ctx;
 
-static unsigned int find_mv_vars_execute();
+#define dump_file stderr
+
+#define debug_printf(args...) do {               \
+        if (dump_file) {                        \
+            fprintf(dump_file, args);           \
+        }                                       \
+    } while(0)
 
 
 /*
@@ -53,12 +58,6 @@ static unsigned int find_mv_vars_execute();
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                 bool *no_add_attrs)
 {
-#ifdef DEBUG
-    fprintf(stderr, "---- attributing MULTIVERSE variable ");
-    fprintf(stderr, "(extern = %d) ", DECL_EXTERNAL(*node));
-    print_generic_stmt(stderr, *node, 0);
-#endif
-
     int type = TREE_CODE(TREE_TYPE(*node));
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE) {
@@ -79,7 +78,6 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                                      DECL_ATTRIBUTES(*node)));
         DECL_UNINLINABLE(*node) = 1;
     } else {
-        // FIXME: Error message for functions
         error("variable %qD with %qE attribute must be an integer "
               "or enumeral type", *node, name);
     }
@@ -216,16 +214,7 @@ static void replace_and_constify(tree old_var, const int value)
         gimple_stmt_iterator gsi;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             gimple stmt = gsi_stmt(gsi);
-
-#ifdef DEBUG
-            fprintf(stderr, "---- Checking operands in statement: ");
-            print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
-#endif
-
             if (!is_gimple_assign(stmt)) {
-#ifdef DEBUG
-                fprintf(stderr, "...skipping non-assign statement\n");
-#endif
                 continue;
             }
 
@@ -237,8 +226,11 @@ static void replace_and_constify(tree old_var, const int value)
 
                 gimple_set_op(stmt, num, new_var);
                 update_stmt(stmt);
-                fprintf(stderr, "...replacing operand in this statement: ");
-                print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
+
+                if (dump_file) {
+                    fprintf(dump_file, ".. found multiverse variable in statement, replacing: ");
+                    print_gimple_stmt(dump_file, stmt, 0, TDF_SLIM);
+                }
             }
         }
     }
@@ -271,9 +263,10 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
     fname += MV_SUFFIX;
 
 
-#ifdef DEBUG
-    fprintf(stderr, "---- Generating function clone '%s'\n", fname.c_str());
-#endif
+    if (dump_file) {
+        fprintf(dump_file, "generating function clone %s\n",
+                fname.c_str(), IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl)));
+    }
 
     clone = clone_fndecl(fndecl, fname);
     gcc_assert(clone != fndecl);
@@ -309,20 +302,6 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
 
 
 /*
- * Return true if fndecl is cloneable (i.e., not main).
- */
-bool is_cloneable_function(tree fndecl)
-{
-    std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
-
-    if (fname.compare("main") == 0)
-        return false;
-
-    return true;
-}
-
-
-/*
  * Pass to find multiverse attributed variables in the current function.  In
  * case such variables are used in conditional statements, the functions is
  * cloned and specialized (constant propagation, etc.).
@@ -330,21 +309,6 @@ bool is_cloneable_function(tree fndecl)
 static unsigned int find_mv_vars_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
-#ifdef DEBUG
-    fprintf(stderr, "************************************************************\n");
-    print_current_pass(stderr);
-    fprintf(stderr, "**** Searching multiverse variables in '%s'\n\n", fname.c_str());
-#endif
-
-/*
-    if (!is_cloneable_function(cfun->decl)) {
-#ifdef DEBUG
-        fprintf(stderr, ".... skipping, it's not multiverseable\n");
-        fprintf(stderr, "************************************************************\n\n");
-#endif
-        return 0;
-    }
-*/
 
     bool is_attributed_mv = is_multiverse_fn(cfun->decl);
 
@@ -360,13 +324,8 @@ static unsigned int find_mv_vars_execute()
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
             last_stmt = stmt;
             stmt = gsi_stmt(gsi);
-#ifdef DEBUG
-            fprintf(stderr, "---- Checking operands in statement: ");
-            // print_gimple_stmt(stderr, stmt, 0, TDF_SLIM);
-#endif
 
             if (!is_gimple_assign(stmt)) {
-                debug_print("...skipping non-assign statement\n");
                 continue;
             }
 
@@ -376,9 +335,10 @@ static unsigned int find_mv_vars_execute()
              */
             tree lhs = gimple_assign_lhs(stmt);
             if (is_multiverse_var(lhs)) {
-#ifdef DEBUG
-                fprintf(stderr, "...skipping function: assign to multiverse variable\n");
-#endif
+                if (dump_file) {
+                    fprintf(dump_file, "function assigns to multiverse variable: %s; not specializing\n",
+                            IDENTIFIER_POINTER(DECL_NAME(lhs)));
+                }
                 mv_blacklist.insert(lhs);
                 continue;
             }
@@ -393,13 +353,13 @@ static unsigned int find_mv_vars_execute()
                 // Function might not be attributed with multiverse. Emit a warning
                 if (!is_attributed_mv) {
                     location_t loc = gimple_location(stmt);
-                    warning_at(loc, 0, "function uses multiverse variables without being multiverse itself");
+                    warning_at(loc, OPT_Wextra, "function uses multiverse variables without being multiverse itself");
                     continue;
                 }
-#ifdef DEBUG
-                fprintf(stderr, "...found multiverse operand: ");
-                print_generic_stmt(stderr, var, 0);
-#endif
+                if (dump_file) {
+                    fprintf(dump_file, "found multiverse operand: ");
+                    print_generic_stmt(dump_file, var, 0);
+                }
                 mv_vars.insert(var);
 
 
@@ -409,15 +369,12 @@ static unsigned int find_mv_vars_execute()
 
     }
 
-#ifdef DEBUG
-    fprintf(stderr, "...found '%d' multiverse variables\n", mv_vars.size());
-#endif
+    if (dump_file) {
+        fprintf(dump_file, "...found '%d' multiverse variables (%d blacklisted)\n",
+                mv_vars.size(), mv_blacklist.size());
+    }
     std::set<tree>::iterator varit;
     for (varit = mv_blacklist.begin(); varit != mv_blacklist.end(); varit++) {
-#ifdef DEBUG
-        fprintf(stderr, "...removing blacklisted variable: ");
-        print_generic_stmt(stderr, *varit, 0);
-#endif
         mv_vars.erase(*varit);
     }
 
@@ -448,9 +405,6 @@ static unsigned int find_mv_vars_execute()
         multiverse_function(fn_data,var_map_i);
     }
 
-#ifdef DEBUG
-    fprintf(stderr, "************************************************************\n\n");
-#endif
     return 0;
 }
 
@@ -504,18 +458,29 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
 static
 int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
                          equivalence_class &ec) {
+    debug_printf("\nmerge mvfn descriptors for: %s\n",
+                 IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
+
     bool changed = true;
     while (changed) {
         changed = false;
         // We want to merge b into a if possible
         for (unsigned a = 0; a < ec.size(); a++) {
             for (unsigned b = a+1; b < ec.size(); b++) {
-                ec[a].first->dump(stderr); debug_print("\n");
-                ec[b].first->dump(stderr); debug_print("\n");
+                if (dump_file) {
+                    ec[a].first->dump(dump_file);
+                    debug_printf(" <-> ");
+                    ec[b].first->dump(dump_file);
+                    debug_printf("\n");
+                }
                 bool merged = merge_if_possible(ec[a].first->assignments,
                                                 ec[b].first->assignments);
                 if (merged) {
-                    // debug_print("  Merged! "); ec[a].first->dump(stderr); debug_print("\n");
+                    if (dump_file) {
+                        debug_printf(" ->>  Merged: ");
+                        ec[a].first->dump(dump_file);
+                        debug_printf("\n");
+                    }
                     changed = true;
                     // Remove from the global list of mvfn_function descriptors
                     for (auto it = fn_info.mv_functions.begin();
@@ -540,12 +505,13 @@ int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
 static unsigned int mv_variant_elimination_execute() {
     using namespace ipa_icf;
 
-    debug_print("IPA: mv variant_elimination\n");
-
     bitmap_obstack bmstack;
     bitmap_obstack_initialize(&bmstack);
 
     for (auto &fn_info : mv_info_ctx.functions) {
+        debug_printf("\nmerge function bodies for: %s\n",
+                     IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
+
         std::list<equivalence_class> classes;
         hash_map <symtab_node *, sem_item *> ignored_nodes;
         for (auto &mvfn_info : fn_info.mv_functions) {
@@ -553,14 +519,13 @@ static unsigned int mv_variant_elimination_execute() {
             sem_function *func = new sem_function(node, 0, &bmstack);
             func->init();
 
-            // std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(mvfn_info.mvfn_decl));
-            // debug_print("%s ", fname.c_str());
+            debug_printf("%s ", IDENTIFIER_POINTER(DECL_NAME(mvfn_info.mvfn_decl)));
 
             bool found = false;
             for (auto &ec : classes) {
                 bool eq = ec.front().second->equals(func, ignored_nodes);
                 if (eq) {
-                    //     debug_print("EQ\n");
+                    debug_printf(" EQ; add to existing equivalence class\n");
                     ec.push_back({&mvfn_info, func});
                     found = true;
                     break;
@@ -568,12 +533,12 @@ static unsigned int mv_variant_elimination_execute() {
             }
             // None found? Start a new one!
             if (!found) {
-                // debug_print("NEQ\n");
+                debug_printf("NEQ; new equivalence class\n");
                 classes.push_back({{&mvfn_info,func}});
             }
         }
         for (auto &ec : classes) {
-            debug_print("found equivalence class of size %d\n", ec.size());
+            debug_printf("found function equivalence class of size %d\n", ec.size());
             /* If multiple multiverse functions are equivalent. Let
                them all point to the same function body. */
             if (ec.size() > 1) {
@@ -594,7 +559,7 @@ static unsigned int mv_variant_elimination_execute() {
                 // ec = [(a=0, b=0), (a=0, b=1), (a=1, b=0)]
                 // Then it would be sufficient to expose the following terms
                 merge_mvfn_selectors(fn_info, ec);
-                debug_print(".. reduced to size %d\n", ec.size());
+                debug_printf(".. reduced to size %d\n", ec.size());
             }
         }
         // Cleanup of sem_function *
@@ -671,10 +636,6 @@ static unsigned int find_mv_callsites_execute()
  */
 int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *version)
 {
-#ifdef DEBUG
-    fprintf(stderr, "---- Initializing the multiverse GCC plugin.\n");
-#endif
-
     const char * plugin_name = info->base_name;
     struct register_pass_info find_mv_vars_info;
     struct register_pass_info find_mv_callsites_info;

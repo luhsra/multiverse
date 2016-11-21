@@ -553,13 +553,11 @@ static void build_init_ctor(tree mv_info_ptr_type, tree mv_info_var)
 
 void mv_info_init(void *event_data, void *data)
 {
-    debug_print("mv: start mv_info\n");
     build_types((mv_info_ctx_t *) data);
 }
 
 void mv_info_finish(void *event_data, void *data)
 {
-    debug_print("mv: finish mv_info\n");
     mv_info_ctx_t *ctx = (mv_info_ctx_t *) data;
     tree info_var = build_var(ctx->info_type, "__mv_info_");
 
