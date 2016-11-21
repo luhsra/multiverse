@@ -545,7 +545,9 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
 /* In a mvfn selector equivalence class, all selectors point to the
    same mvfn function body. Nevertheless, their guarding assignment
    maps may be different. In some cases, we can reduce the number of
-   descriptors, by merging their intervals. */
+   descriptors, by merging their intervals.
+
+   WARNING: I think this merging is not optimal */
 static
 int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
                          equivalence_class &ec) {
@@ -564,26 +566,34 @@ int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
                     ec[b].first->dump(dump_file);
                     debug_printf("\n");
                 }
+                // Merge B in A
                 bool merged = merge_if_possible(ec[a].first->assignments,
                                                 ec[b].first->assignments);
+                unsigned dst = a, remove = b;
+                if (!merged) {
+                    // Did not work? Merge A into B
+                    merged = merge_if_possible(ec[b].first->assignments,
+                                               ec[a].first->assignments);
+                    remove = a; dst = b;
+                }
                 if (merged) {
                     if (dump_file) {
                         debug_printf(" ->>  Merged: ");
-                        ec[a].first->dump(dump_file);
+                        ec[dst].first->dump(dump_file);
                         debug_printf("\n");
                     }
                     changed = true;
                     // Remove from the global list of mvfn_function descriptors
                     for (auto it = fn_info.mv_functions.begin();
                          it != fn_info.mv_functions.end(); it++) {
-                        if (&*it == ec[b].first) {
+                        if (&*it == ec[remove].first) {
                             fn_info.mv_functions.erase(it);
                             break;
                         }
                     }
                     // Remove second mvfn descriptor
-                    delete ec[b].second; // sem_function *
-                    ec.erase(ec.begin() + b);
+                    delete ec[remove].second; // sem_function *
+                    ec.erase(ec.begin() + remove);
                 }
             }
         }

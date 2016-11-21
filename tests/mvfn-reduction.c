@@ -70,8 +70,8 @@ int main(int argc, char **argv)
 
     }
 
-    // xor() also has only 2 bodies, but 5 descriptors
-    assert(desc_count(&xor) < 8);
+    // xor() also has only 2 bodies, less than 6 descriptor
+    assert(desc_count(&xor) <= 6);
     assert(body_count(&xor) == 2);
     // Functional test
     for (a = 0; a <= 1; a++) {
