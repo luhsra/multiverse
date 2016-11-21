@@ -306,7 +306,7 @@ static void multiverse_function(mv_info_fn_data &fn_info, std::map<tree, int> va
  * case such variables are used in conditional statements, the functions is
  * cloned and specialized (constant propagation, etc.).
  */
-static unsigned int find_mv_vars_execute()
+static unsigned int mv_variant_generation_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
@@ -365,8 +365,6 @@ static unsigned int find_mv_vars_execute()
 
             }
         }
-
-
     }
 
     if (dump_file) {
@@ -409,7 +407,7 @@ static unsigned int find_mv_vars_execute()
 }
 
 
-#define PASS_NAME find_mv_vars
+#define PASS_NAME mv_variant_generation
 #define NO_GATE
 #include "gcc-generate-gimple-pass.h"
 
@@ -584,7 +582,7 @@ static unsigned int mv_variant_elimination_execute() {
  * multiverse function. For such callsites, we insert a label and
  * record it for the mv_info.
  */
-static unsigned int find_mv_callsites_execute()
+static unsigned int mv_callsites_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
     // debug_print("rtl: %p %s\n", cfun, fname.c_str());
@@ -626,7 +624,7 @@ static unsigned int find_mv_callsites_execute()
 }
 
 
-#define PASS_NAME find_mv_callsites
+#define PASS_NAME mv_callsites
 #define NO_GATE
 #include "gcc-generate-rtl-pass.h"
 
@@ -637,10 +635,9 @@ static unsigned int find_mv_callsites_execute()
 int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *version)
 {
     const char * plugin_name = info->base_name;
-    struct register_pass_info find_mv_vars_info;
-    struct register_pass_info find_mv_callsites_info;
+    struct register_pass_info mv_variant_generation_info;
     struct register_pass_info mv_variant_elimination_info;
-
+    struct register_pass_info mv_callsites_info;
 
     if (!plugin_default_version_check(version, &gcc_version)) {
         error(G_("incompatible gcc/plugin versions"));
@@ -657,11 +654,11 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
 
     // register pass: generate multiverse variants
-    find_mv_vars_info.pass = make_find_mv_vars_pass();
-    find_mv_vars_info.reference_pass_name = "ssa";
-    find_mv_vars_info.ref_pass_instance_number = 0;
-    find_mv_vars_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
-    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_vars_info);
+    mv_variant_generation_info.pass = make_mv_variant_generation_pass();
+    mv_variant_generation_info.reference_pass_name = "ssa";
+    mv_variant_generation_info.ref_pass_instance_number = 0;
+    mv_variant_generation_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
+    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_generation_info);
 
     // register pass: eliminate duplicated variants
     mv_variant_elimination_info.pass = make_mv_variant_elimination_pass();
@@ -670,12 +667,12 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     mv_variant_elimination_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_elimination_info);
 
-    // register the multiverse RTL pass
-    find_mv_callsites_info.pass = make_find_mv_callsites_pass();
-    find_mv_callsites_info.reference_pass_name = "final";
-    find_mv_callsites_info.ref_pass_instance_number = 0;
-    find_mv_callsites_info.pos_op = PASS_POS_INSERT_BEFORE; // BEFORE => no assembly yet
-    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &find_mv_callsites_info);
+    // register the multiverse RTL pass which adds labels to callsites
+    mv_callsites_info.pass = make_mv_callsites_pass();
+    mv_callsites_info.reference_pass_name = "final";
+    mv_callsites_info.ref_pass_instance_number = 0;
+    mv_callsites_info.pos_op = PASS_POS_INSERT_BEFORE; // BEFORE => no assembly yet
+    register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_callsites_info);
 
     // Finish off the generation of multiverse info
     register_callback(plugin_name, PLUGIN_FINISH_UNIT, mv_info_finish, &mv_info_ctx);
