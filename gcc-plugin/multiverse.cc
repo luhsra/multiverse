@@ -487,10 +487,14 @@ static unsigned int mv_variant_generation_execute()
         mv_vars.erase(black);
     }
 
-    // Multiverse this function w.r.t. multiverse variables
+    // If a multiverse-attributed function does not reference multiverse
+    // variables, throw a warning
     const int numvars = mv_vars.size();
-    if (numvars == 0)
+    if (numvars == 0) {
+        location_t loc = DECL_SOURCE_LOCATION(cfun->decl);
+        warning_at(loc, OPT_Wextra, "multiverse function does not reference multiverse variable");
         return 0;
+    }
 
     /* Here, we know that we will generate multiverse variants. We use
      * generators to generate all of them */
