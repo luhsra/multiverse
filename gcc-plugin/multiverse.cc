@@ -1,14 +1,8 @@
 /*
- * Copyright 2016 by Valentin Rothberg <valentinrothberg@gmail.com>
- * Licensed under the GPL v2
+ * Copyright 2016 by Christian Dietrich <dietrich@sra.uni-hannover.de>
+ * Copyright 2016 by Valentin Rothberg <rothberg@sra.uni-hannover.de>
  *
- *
- * This GCC plugin adds support for multiversing functions, as described by
- * [1,2].  Currently, the multiverse support is limited to 'boolean' variables
- * that must be attributed with 'multiverse'.
- *
- *
- * Further reading for function/compiler multiverse:
+ * This GCC plugin adds multiversing support, as described by [1,2].
  *
  * [1] Kernel Newbies wiki
  *     https://kernelnewbies.org/KernelProjects/compiler-multiverse
@@ -17,20 +11,19 @@
  *     https://www4.cs.fau.de/Publications/2016/rothberg_16_dspl.pdf
  */
 
+#include <algorithm>
+#include <assert.h>
 #include <bitset>
 #include <list>
 #include <map>
 #include <set>
 #include <sstream>
+#include <string>
 #include <vector>
 
-#include <string>
-#include <algorithm>
-#include <assert.h>
-
 #include "gcc-common.h"
-#include "mv-info.h"
 #include "multiverse.h"
+#include "mv-info.h"
 
 
 int plugin_is_GPL_compatible;
