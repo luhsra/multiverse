@@ -4,18 +4,16 @@
 # 	- gcc-$VERSION-source
 # 	- gcc-$VERSION-plugin-dev
 
-HOST_GCC=g++
-TARGET_GCC=gcc
-PLUGIN= multiverse
-GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
-CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -DDEBUG=1 -gdwarf-2
+GCCPLUGINS_DIR:= $(shell $(CXX) -print-file-name=plugin)
+CXXFLAGS += -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -gdwarf-2
+SOURCES=$(shell echo *.cc)
+ALLPRODUCTS=multiverse.so
 
-all: $(PLUGIN).so
+all: multiverse.so
 
-$(PLUGIN).so: multiverse.o mv-info.o
-	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
+include ../common.mk
 
-clean:
-	rm -f *.o *.so
+multiverse.so: $(OBJECTS)
+	$(CXX) -shared $(CXXFLAGS) $^ -o $@
 
-.PHONY= all clean debug test
+.PHONY = all clean

@@ -1,10 +1,11 @@
 CC = gcc
 CFLAGS = -gdwarf-2
+SOURCES=$(shell echo *.c)
 
-libmultiverse.a: mv_info.o mv_commit.o arch-x86.o
+ALLPRODUCTS+=libmultiverse.a
+all: libmultiverse.a
+
+include ../common.mk
+
+libmultiverse.a: $(OBJECTS)
 	ar rcs $@ $^
-
-mv_info.o: mv_info.c multiverse.h
-
-clean:
-	rm -f *.o libmultiverse.a
