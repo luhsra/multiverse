@@ -189,7 +189,7 @@ int multiverse_commit_fn(void * function_body);
    nothing changes, and -1 on an error.
 
 */
-int multiverse_commit_info_var(struct mv_info_var *var);
+int multiverse_commit_info_refs(struct mv_info_var *var);
 
 /**
    @brief commit all functions that reference a variable
@@ -207,12 +207,10 @@ int multiverse_commit_info_var(struct mv_info_var *var);
    @verbatim
    int __attribute__((multiverse)) config;
    ...
-   multiverse_commit_var(&config);
+   multiverse_commit_refs(&config);
    @endverbatim
 */
-int multiverse_commit_var(void * var_location);
-
-
+int multiverse_commit_refs(void * var_location);
 
 
 /**
@@ -251,7 +249,7 @@ int multiverse_revert_fn(void* function_body);
    nothing changes, and -1 on an error.
 
 */
-int multiverse_revert_info_var(struct mv_info_var *var);
+int multiverse_revert_info_refs(struct mv_info_var *var);
 
 /**
    @brief commit all functions that reference a variable
@@ -267,7 +265,7 @@ int multiverse_revert_info_var(struct mv_info_var *var);
    nothing changes, and -1 on an error.
 
 */
-int multiverse_revert_var(void * var_location);
+int multiverse_revert_refs(void * var_location);
 
 /**
    @brief Revert all multiverse code modifications

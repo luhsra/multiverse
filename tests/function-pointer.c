@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     multiverse_init();
 
     /* Check the static property of multiverse variants */
-    multiverse_commit_var(&config);
+    multiverse_commit_refs(&config);
     config = 1; assert(foo_ptr() == 0 && config == 1);
 
     multiverse_commit_fn(&foo);

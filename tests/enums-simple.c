@@ -29,12 +29,12 @@ int main(int argc, char **argv)
     multiverse_init();
 
     configA = a; // 0
-    multiverse_commit_var(&configA);  // TODO: add multiverse-tracked semantic
+    multiverse_commit_refs(&configA);  // TODO: add multiverse-tracked semantic
     foo();      // configA=0, configB=0
 
     configB = b; // 1
     foo();      // configA=0, configB=1
-    multiverse_commit_var(&configB);
+    multiverse_commit_refs(&configB);
     foo();      // configA=0, configB=1
 
     return 0;

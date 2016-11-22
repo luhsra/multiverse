@@ -158,7 +158,7 @@ int multiverse_commit_fn(void *function_body) {
     return multiverse_commit_info_fn(fn);
 }
 
-int multiverse_commit_var_info(struct mv_info_var *var) {
+int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
     mv_select_ctx_t *ctx = multiverse_select_start();
     if (!ctx) return -1;
@@ -176,10 +176,10 @@ int multiverse_commit_var_info(struct mv_info_var *var) {
     return ret;
 }
 
-int multiverse_commit_var(void *variable_location) {
+int multiverse_commit_refs(void *variable_location) {
     struct mv_info_var *var = multiverse_info_var(variable_location);
     if (!var) return -1;
-    return multiverse_commit_var_info(var);
+    return multiverse_commit_info_refs(var);
 }
 
 int multiverse_commit() {
@@ -220,7 +220,7 @@ int multiverse_revert_fn(void *function_body) {
     return multiverse_revert_info_fn(fn);
 }
 
-int multiverse_revert_var_info(struct mv_info_var *var) {
+int multiverse_revert_info_refs(struct mv_info_var *var) {
     int ret = 0;
     mv_select_ctx_t *ctx = multiverse_select_start();
     if (!ctx) return -1;
@@ -238,10 +238,10 @@ int multiverse_revert_var_info(struct mv_info_var *var) {
     return ret;
 }
 
-int multiverse_revert_var(void *variable_location) {
+int multiverse_revert_refs(void *variable_location) {
     struct mv_info_var *var = multiverse_info_var(variable_location);
     if (!var) return -1;
-    return multiverse_revert_var_info(var);
+    return multiverse_revert_info_refs(var);
 }
 
 

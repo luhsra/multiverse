@@ -14,10 +14,10 @@ int main(int argc, char **argv)
     multiverse_init();
 
     /* Check the static property of multiverse variants */
-    multiverse_commit_var(&config);
+    multiverse_commit_refs(&config);
     config = 23; assert(foo() == 0 && config == 23);
 
-    multiverse_commit_var(&config);
+    multiverse_commit_refs(&config);
     assert(foo() == 23 && config == 23);
     config = 42; assert(foo() == 42 && config == 42);
 

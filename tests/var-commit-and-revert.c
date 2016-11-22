@@ -35,13 +35,13 @@ int main(int argc, char **argv)
     foo();  // generic function
 
     configA = 0;
-    multiverse_commit_var(&configA);
+    multiverse_commit_refs(&configA);
     foo();  // optimized version for configA=0
 
     configA = 1;
     foo();  // optimized version for configA=0, although configA is now 1
 
-    multiverse_revert_var(&configA);
+    multiverse_revert_refs(&configA);
     foo();  // generic function
 
     return 0;

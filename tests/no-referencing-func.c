@@ -17,7 +17,7 @@ int main(int argc, char **argv)
     int x = 0;
     config = 1;
 
-    x = multiverse_commit_var(&config);
+    x = multiverse_commit_refs(&config);
     assert(x == 0);
 
     return 0;

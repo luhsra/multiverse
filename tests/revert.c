@@ -14,10 +14,10 @@ int main(int argc, char **argv)
     multiverse_init();
 
     /* Check the static property of multiverse variants */
-    multiverse_commit_var(&config);
+    multiverse_commit_refs(&config);
     config = 1; assert(foo() == 0 && config == 1);
 
-    multiverse_commit_var(&config);
+    multiverse_commit_refs(&config);
     config = 0; assert(foo() == 1 && config == 0);
 
     /* After revert the function should be flexible again. */

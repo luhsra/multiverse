@@ -27,12 +27,12 @@ int main(int argc, char **argv)
     assert(foo() == 0 && config == 0);
 
     config = 1;
-    num_changed_funcs = multiverse_commit_var(&config);
+    num_changed_funcs = multiverse_commit_refs(&config);
     assert(num_changed_funcs == 1);
 
     assert(foo() == 1 && config == 1);
 
-    num_changed_funcs = multiverse_commit_var(&config);
+    num_changed_funcs = multiverse_commit_refs(&config);
     assert(num_changed_funcs == 0);
 
     return 0;
