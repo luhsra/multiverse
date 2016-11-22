@@ -141,6 +141,7 @@ static bool is_multiverse_var(tree &var)
     return true;
 }
 
+
 /*
  * Return true if function is multiverse attributed.
  */
@@ -294,7 +295,8 @@ static void multiverse_function(mv_info_fn_data &fn_info,
 }
 
 
-void mv_variant_generator::add_dimension(tree variable, unsigned score) {
+void mv_variant_generator::add_dimension(tree variable, unsigned score)
+{
     bool found = false;
     for (const auto &item : dimensions) {
         found |= (item.variable == variable);
@@ -303,10 +305,12 @@ void mv_variant_generator::add_dimension(tree variable, unsigned score) {
     dimensions.push_back({variable, score});
 }
 
+
 void mv_variant_generator::add_dimension_value(tree variable,
                                                const char *label,
                                                unsigned HOST_WIDE_INT value,
-                                               unsigned score) {
+                                               unsigned score)
+{
     bool found = false;
     for (auto &dim : dimensions) {
         if (dim.variable == variable) {
@@ -318,7 +322,9 @@ void mv_variant_generator::add_dimension_value(tree variable,
     assert(found && "Dimension not found");
 }
 
-void mv_variant_generator::start(unsigned maximal_elements) {
+
+void mv_variant_generator::start(unsigned maximal_elements)
+{
     // First, we sort dimensions and dimension values according to
     // their score. The highest scores are sorted to the front
     state.clear();
@@ -352,12 +358,16 @@ void mv_variant_generator::start(unsigned maximal_elements) {
     this->maximal_elements = maximal_elements;
 }
 
-bool mv_variant_generator::end_p() {
+
+bool mv_variant_generator::end_p()
+{
     return ((element_count >= maximal_elements)
             || state[0] >= dimensions[0].values.size());
 }
 
-mv_variant_generator::variant mv_variant_generator::next() {
+
+mv_variant_generator::variant mv_variant_generator::next()
+{
     variant ret;
     if (end_p()) return ret; // Generator ended
 
@@ -379,10 +389,11 @@ mv_variant_generator::variant mv_variant_generator::next() {
     return ret;
 }
 
+
 /*
  * Pass to find multiverse attributed variables in the current function.  In
- * case such variables are used in conditional statements, the functions is
- * cloned and specialized (constant propagation, etc.).
+ * case such variables are used in assignments or conditional statements, the
+ * functions is cloned and specialized (constant propagation, etc.).
  */
 static unsigned int mv_variant_generation_execute()
 {
@@ -542,13 +553,17 @@ typedef std::vector<
     std::pair<mv_info_mvfn_data*,
               ipa_icf::sem_function *>> equivalence_class;
 
-// For two assignment maps, we test if they differ only in one
-// variable assignment. If they differ, we furthermore test, wheter
-// their intervals are next to each other. In this case, we merge b
-// into a, and say: yes, we merged something here.
+
+/*
+ * For two assignment maps, we test if they differ only in one variable
+ * assignment. If they differ, we furthermore test, wheter their intervals are
+ * next to each other. In this case, we merge b into a, and say: yes, we merged
+ * something here.
+ */
 static bool
 merge_if_possible(std::vector<mv_info_assignment_data> &a,
-                     std::vector<mv_info_assignment_data> &b) {
+                  std::vector<mv_info_assignment_data> &b)
+{
     if (a.size() != b.size()) return false;
 
     unsigned differences = 0, idx = 0;
@@ -576,15 +591,19 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
     return false;
 }
 
-/* In a mvfn selector equivalence class, all selectors point to the
-   same mvfn function body. Nevertheless, their guarding assignment
-   maps may be different. In some cases, we can reduce the number of
-   descriptors, by merging their intervals.
 
-   WARNING: I think this merging is not optimal */
+/*
+ * In a mvfn selector equivalence class, all selectors point to the same mvfn
+ * function body. Nevertheless, their guarding assignment maps may be different.
+ * In some cases, we can reduce the number of descriptors, by merging their
+ * intervals.
+ *
+ * WARNING/TODO: I think this merging is not optimal
+ */
 static
 int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
-                         equivalence_class &ec) {
+                         equivalence_class &ec)
+{
     debug_printf("\nmerge mvfn descriptors for: %s\n",
                  IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
 
@@ -635,9 +654,12 @@ int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
     return 0;
 }
 
+
 /*
+ * TODO: some nice description
  */
-static unsigned int mv_variant_elimination_execute() {
+static unsigned int mv_variant_elimination_execute()
+{
     using namespace ipa_icf;
 
     bitmap_obstack bmstack;
@@ -709,6 +731,7 @@ static unsigned int mv_variant_elimination_execute() {
 
     return TODO_remove_functions;
 }
+
 
 #define PASS_NAME mv_variant_elimination
 #define NO_GATE
