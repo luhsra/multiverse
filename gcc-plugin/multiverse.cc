@@ -394,7 +394,11 @@ static unsigned int mv_variant_generation_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
-    bool is_attributed_mv = is_multiverse_fn(cfun->decl);
+    if (!is_multiverse_fn(cfun->decl)) {
+        debug_printf("mv variant generation: skipping non-mv function '%s'\n",
+                     fname.c_str());
+        return 0;
+    }
 
     std::set<tree> mv_vars;
     std::map<tree, std::set<unsigned HOST_WIDE_INT>> mv_var_hints;
@@ -434,16 +438,11 @@ static unsigned int mv_variant_generation_execute()
                 if (!is_multiverse_var(var))
                     continue;
 
-                // Function might not be attributed with multiverse. Emit a warning
-                if (!is_attributed_mv) {
-                    location_t loc = gimple_location(stmt);
-                    warning_at(loc, OPT_Wextra, "function uses multiverse variables without being multiverse itself");
-                    continue;
-                }
                 if (dump_file) {
                     fprintf(dump_file, "found multiverse operand: ");
                     print_generic_stmt(dump_file, var, 0);
                 }
+
                 if (gimple_num_ops(stmt) == 2 && TREE_CODE(TREE_TYPE(var)) == INTEGER_TYPE) {
                     // We can try to guess the value
                     fprintf(stderr, "guess!");
