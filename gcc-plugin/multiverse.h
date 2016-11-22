@@ -4,12 +4,13 @@
 #include <stdint.h>
 #include "gcc-common.h"
 
-/* The multiverse generator is used to capture all dimensions
- * (variables) and their values for a specific multiverse function.
- * The variables, and the values are scored and sorted according to
- * their score. One can give a maximal numer of elements the generator
- * should emit. If a variable assignment never changes during the
- * generated sequence, the dimension is not multiversed. */
+/*
+ * The multiverse generator is used to capture all dimensions (variables) and
+ * their values for a specific multiverse function.  The variables, and the
+ * values are scored and sorted according to their score. One can give a maximal
+ * number of elements the generator should emit. If a variable assignment never
+ * changes during the generated sequence, the dimension is not multiversed.
+ */
 struct mv_variant_generator {
     struct dimension_value {
         tree variable;
