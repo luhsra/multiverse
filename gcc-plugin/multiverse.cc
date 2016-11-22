@@ -41,7 +41,7 @@ static mv_info_ctx_t mv_info_ctx;
 
 #define dump_file stderr
 
-#define debug_printf(args...) do {               \
+#define debug_printf(args...) do {              \
         if (dump_file) {                        \
             fprintf(dump_file, args);           \
         }                                       \
@@ -49,8 +49,8 @@ static mv_info_ctx_t mv_info_ctx;
 
 
 /*
- * Handler for multiverse attribute of variables. We collect here all
- * variables that are defined in this compilation unit.
+ * Handler for multiverse attribute of variables. We collect here all variables
+ * that are defined in this compilation unit.
  */
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                 bool *no_add_attrs)
@@ -65,11 +65,10 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
             mv_info_ctx.variables.push_back(mv_variable);
         }
     } else if (type == FUNCTION_TYPE) {
-        // A function was declared as a multiversed function.
-        // Everything is fine. We mark the function as unclonable to
-        // avoid all kind of nasty bugs. (function splitting)
-        // Furthermore, we mark the function explicitly as
-        // uninlinable.
+        // A function was declared as a multiversed function.  Everything is
+        // fine. We mark the function as unclonable to avoid all kind of nasty
+        // bugs. (function splitting) Furthermore, we mark the function
+        // explicitly as uninlinable.
         DECL_ATTRIBUTES(*node) = tree_cons(get_identifier("noclone"), NULL,
                                            tree_cons(get_identifier("noinline"), NULL,
                                                      DECL_ATTRIBUTES(*node)));
@@ -273,7 +272,7 @@ static void multiverse_function(mv_info_fn_data &fn_info,
     clone_func = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_func);
     mv_info_mvfn_data mvfn;
-    mvfn.mvfn_decl = clone; // Store declartion for clone
+    mvfn.mvfn_decl = clone; // Store declaration for clone
 
     for (mv_variant_generator::dimension_value &val : assignment) {
         replace_and_constify(val.variable, val.value);
@@ -339,6 +338,9 @@ void mv_variant_generator::start(unsigned maximal_elements)
               [](dimension &a, dimension &b) {
                   return b.score > a.score;
               });
+
+    // TODO: what is an "unimportant" dimension?
+
     // We calculate how many "unimportant" dimensions are skipped,
     // since we never will variante in their assignment, because
     // we never get there (maximal_elements)
@@ -375,7 +377,7 @@ mv_variant_generator::variant mv_variant_generator::next()
     for (unsigned i = skip_dimensions; i < dimensions.size(); i++) {
         ret.push_back(dimensions[i].values[state[i]]);
     }
-    // and incrmeent to the next element
+    // And increment to the next element
     state[dimensions.size() -1] ++;
     // Overflow for all dimensions but first one i != 0
     for (unsigned i = dimensions.size() - 1; i > 0; --i) {
@@ -466,7 +468,7 @@ static unsigned int mv_variant_generation_execute()
                             else if (gimple_op(use_stmt, 1) == local_var)
                                 comparand = gimple_op(use_stmt, 0);
                             else
-                                assert(false && "Could not find variable in comparision");
+                                assert(false && "Could not find variable in comparison");
 
                             if (!CONSTANT_CLASS_P(comparand)) continue;
 
@@ -558,7 +560,7 @@ typedef std::vector<
 
 /*
  * For two assignment maps, we test if they differ only in one variable
- * assignment. If they differ, we furthermore test, wheter their intervals are
+ * assignment. If they differ, we furthermore test, whether their intervals are
  * next to each other. In this case, we merge b into a, and say: yes, we merged
  * something here.
  */
@@ -701,7 +703,7 @@ static unsigned int mv_variant_elimination_execute()
             /* If multiple multiverse functions are equivalent. Let
                them all point to the same function body. */
             if (ec.size() > 1) {
-                // The first in the equivalence class is our representant
+                // The first in the equivalence class is our representative
                 auto &first = ec[0];
                 for (unsigned i = 1; i < ec.size(); i++) {
                     auto &other = ec[i];
@@ -713,7 +715,7 @@ static unsigned int mv_variant_elimination_execute()
                     // We reference the one variant that is not removed.
                     other.first->mvfn_decl = first.first->mvfn_decl;
                 }
-                // Merge equivalence classes of selektors
+                // Merge equivalence classes of selectors
                 // Think of the following situation:
                 // ec = [(a=0, b=0), (a=0, b=1), (a=1, b=0)]
                 // Then it would be sufficient to expose the following terms
@@ -764,7 +766,7 @@ static unsigned int mv_callsites_execute()
                 LABEL_NUSES(label) = 1;
                 emit_label_before(label, insn);
 
-                // Sonce jump_target_rtx emits a code_label, which is
+                // Since jump_target_rtx emits a code_label, which is
                 // not allowed within a basic block, we transform it
                 // to a NOTE_INSN_DELETEC_LABEL
                 PUT_CODE(label, NOTE);
@@ -805,27 +807,27 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     // Initialize types and the multiverse info structures.
     register_callback(plugin_name, PLUGIN_START_UNIT, mv_info_init, &mv_info_ctx);
 
-    // register plugin information
+    // Register plugin information
     register_callback(plugin_name, PLUGIN_INFO, NULL, &mv_plugin_info);
 
-    // register the multiverse attribute
+    // Register the multiverse attribute
     register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_mv_attribute, NULL);
 
-    // register pass: generate multiverse variants
+    // Register pass: generate multiverse variants
     mv_variant_generation_info.pass = make_mv_variant_generation_pass();
     mv_variant_generation_info.reference_pass_name = "ssa";
     mv_variant_generation_info.ref_pass_instance_number = 0;
     mv_variant_generation_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_generation_info);
 
-    // register pass: eliminate duplicated variants
+    // Register pass: eliminate duplicated variants
     mv_variant_elimination_info.pass = make_mv_variant_elimination_pass();
     mv_variant_elimination_info.reference_pass_name = "opt_local_passes";
     mv_variant_elimination_info.ref_pass_instance_number = 0;
     mv_variant_elimination_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_elimination_info);
 
-    // register the multiverse RTL pass which adds labels to callsites
+    // Register the multiverse RTL pass which adds labels to callsites
     mv_callsites_info.pass = make_mv_callsites_pass();
     mv_callsites_info.reference_pass_name = "final";
     mv_callsites_info.ref_pass_instance_number = 0;
