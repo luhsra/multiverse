@@ -114,7 +114,8 @@ int multiverse_init() {
         for (unsigned i = 0; i < info->n_callsites; ++i) {
             struct mv_info_callsite *cs = &info->callsites[i];
             struct mv_info_fn *fn = multiverse_info_fn(cs->function_body);
-            assert(fn && "Function from Callsite could not be resovled");
+            /* Function was not found. Perhaps there are not multiveres? */
+            if (fn == NULL) continue;
 
             // Try to find an x86 callq (e8 <offset>
             unsigned char *p = cs->call_label;
