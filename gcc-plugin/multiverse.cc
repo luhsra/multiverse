@@ -740,35 +740,35 @@ static unsigned int mv_variant_elimination_execute()
 #include "gcc-generate-simple_ipa-pass.h"
 
 /*
- * Pass to find call instructions in the RTL that references a
- * multiverse function. For such callsites, we insert a label and
- * record it for the mv_info.
+ * Pass to find call instructions in the RTL that reference a multiverse
+ * function. For such callsites, we insert a label and record it for the
+ * mv_info.
  */
 static unsigned int mv_callsites_execute()
 {
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
-    // debug_print("rtl: %p %s\n", cfun, fname.c_str());
     basic_block b;
     rtx_insn *insn;
-    FOR_EACH_BB_FN (b, cfun) {
-        FOR_BB_INSNS (b, insn) {
+
+    FOR_EACH_BB_FN(b, cfun) {
+        FOR_BB_INSNS(b, insn) {
             rtx call;
             if (CALL_P(insn) && (call = get_call_rtx_from(insn))) {
-                tree decl = SYMBOL_REF_DECL (XEXP(XEXP(call,0), 0));
+                tree decl = SYMBOL_REF_DECL(XEXP(XEXP(call,0), 0));
                 if (!decl) continue;
                 if (!is_multiverse_fn(decl)) continue;
 
                 // We have to insert a label before the code
-                tree tree_label = create_artificial_label (UNKNOWN_LOCATION);
-                rtx label = jump_target_rtx (tree_label);
+                tree tree_label = create_artificial_label(UNKNOWN_LOCATION);
+                rtx label = jump_target_rtx(tree_label);
                 LABEL_NUSES(label) = 1;
-                emit_label_before (label, insn);
+                emit_label_before(label, insn);
 
                 // Sonce jump_target_rtx emits a code_label, which is
                 // not allowed within a basic block, we transform it
                 // to a NOTE_INSN_DELETEC_LABEL
-                PUT_CODE (label, NOTE);
-                NOTE_KIND (label) = NOTE_INSN_DELETED_LABEL;
+                PUT_CODE(label, NOTE);
+                NOTE_KIND(label) = NOTE_INSN_DELETED_LABEL;
 
                 mv_info_callsite_data callsite;
                 callsite.fn_decl = decl;
