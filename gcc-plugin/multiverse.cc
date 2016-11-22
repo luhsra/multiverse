@@ -421,10 +421,8 @@ static unsigned int mv_variant_generation_execute()
              */
             tree lhs = gimple_assign_lhs(stmt);
             if (is_multiverse_var(lhs)) {
-                if (dump_file) {
-                    fprintf(dump_file, "function assigns to multiverse variable: %s; not specializing\n",
-                            IDENTIFIER_POINTER(DECL_NAME(lhs)));
-                }
+                location_t loc = gimple_location(stmt);
+                warning_at(loc, OPT_Wextra, "multiverse variable used as lvalue in multiverse function");
                 mv_blacklist.insert(lhs);
                 continue;
             }
