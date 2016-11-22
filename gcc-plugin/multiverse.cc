@@ -500,6 +500,8 @@ static unsigned int mv_variant_generation_execute()
 
     /* Here, we know that we will generate multiverse variants. We use
      * generators to generate all of them */
+
+    //TODO: comments for the code below & for the mv_variant_generator_decl
     mv_variant_generator generator;
     for (auto & variable : mv_vars) {
         if (TREE_CODE(TREE_TYPE(variable)) == ENUMERAL_TYPE) {
