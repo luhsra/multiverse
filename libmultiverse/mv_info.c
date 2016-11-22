@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "mv_commit.h"
+#include "arch.h"
 
 
 struct mv_info *mv_information;
@@ -80,6 +81,15 @@ int multiverse_init() {
 
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
+                // Let's see, if we can extract further information
+                // for our multiverse function, like: constant return value.
+                struct mv_info_mvfn_extra extra;
+                multiverse_arch_decode_mvfn_body(mvfn->function_body, &extra);
+                if (extra.type != MVFN_TYPE_NONE) {
+                    mvfn->extra = malloc(sizeof(extra));
+                    assert(mvfn->extra != NULL);
+                    *mvfn->extra = extra;
+                }
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
                     // IMPORTANT: Setup variable pointer
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
@@ -118,19 +128,15 @@ int multiverse_init() {
             if (fn == NULL) continue;
 
             // Try to find an x86 callq (e8 <offset>
-            unsigned char *p = cs->call_label;
-            void * addr = p + *(int*)(p + 1) + 5;
-            if (*p == 0xe8 && addr == fn->function_body) {
-                // Append patchpoint for callq
-                struct mv_patchpoint pp;
-                pp.type = PP_TYPE_X86_CALLQ;
+            struct mv_patchpoint pp;
+            multiverse_arch_decode_callsite(fn, cs->call_label, &pp);
+            if (pp.type != PP_TYPE_INVALID) {
                 pp.function = fn;
-                pp.location = p;
-
                 mv_info_fn_patchpoint_append(fn, pp);
             } else {
+                char *p = cs->call_label;
                 fprintf(stderr, "Could not decode callsite at %p for %s [%x, %x, %x, %x, %x]=%lx\n", p,
-                        fn->name, p[0], p[1], p[2], p[3], p[4], addr);
+                        fn->name, p[0], p[1], p[2], p[3], p[4]);
             }
         }
     }

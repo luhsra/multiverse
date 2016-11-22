@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <memory.h>
 
 #include "mv_commit.h"
+#include "arch.h"
 
 extern struct mv_info *mv_information;
 
@@ -94,9 +94,6 @@ static void multiverse_select_unprotect(mv_select_ctx_t *ctx, void *addr) {
     printf("\n");
 }
 
-static int callq_argument(void * callsite, void * callee) {
-    return (uintptr_t)callee - ((uintptr_t) callsite + 5);
-}
 
 static int
 multiverse_select_mvfn(mv_select_ctx_t *ctx,
@@ -109,33 +106,15 @@ multiverse_select_mvfn(mv_select_ctx_t *ctx,
         unsigned char *location = pp->location;
         if (pp->type == PP_TYPE_INVALID) continue;
         if (!location) continue;
+
         multiverse_select_unprotect(ctx, location);
         multiverse_select_unprotect(ctx, location+5);
 
-        // Select from original -> Swap out the current code
-        if (fn->extra->active_mvfn == NULL) {
-            memcpy(&pp->swapspace[0], location, 5);
-        }
         if (mvfn == NULL) {
-            // Revert to original state
-            memcpy(location, &pp->swapspace[0], 5);
-            printf("patch %p: original\n", location);
+            multiverse_arch_patchpoint_revert(pp);
         } else {
-            // patch the code segment according to the patchpoint definition
-
-            if (pp->type == PP_TYPE_X86_CALLQ) {
-                printf("patch %p: call %p\n", location, mvfn->function_body);
-                location[0] = 0xe8;
-            } else if (pp->type == PP_TYPE_X86_JUMPQ) {
-                printf("patch %p: jump %p\n", location, mvfn->function_body);
-                location[0] = 0xe9;
-            }
-
-            *((uint32_t *)&location[1]) = callq_argument(location, mvfn->function_body);
+            multiverse_arch_patchpoint_apply(fn, mvfn, pp);
         }
-        // In all cases: Clear the cache afterwards.
-        __clear_cache(location, location+5);
-
     }
 
     fn->extra->active_mvfn = mvfn;

@@ -13,12 +13,14 @@
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
+#include <stdio.h>
+
 struct mv_info_var;
 struct mv_info_mvfn;
 struct mv_info_fn;
 struct mv_info;
 struct mv_info_callsite;
-struct mv_patchpoints;
+struct mv_patchpoint;
 
 typedef unsigned int mv_value_t;
 
@@ -28,10 +30,26 @@ struct mv_info_assignment {
     mv_value_t upper_bound;
 };
 
+typedef enum {
+    MVFN_TYPE_NONE,
+    MVFN_TYPE_NOP,
+    MVFN_TYPE_CONSTANT,
+} mvfn_type_t;
+
+struct mv_info_mvfn_extra {
+    mvfn_type_t type;
+    mv_value_t constant;
+};
+
+
 struct mv_info_mvfn {
     void * function_body;
     unsigned int n_assignments;
     struct mv_info_assignment * assignments;
+    union {
+        void *data;
+        struct mv_info_mvfn_extra *extra;
+    };
 };
 
 struct mv_info_fn_extra {

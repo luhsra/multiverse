@@ -385,6 +385,8 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
 
         unsigned int n_assignments;
         struct mv_info_assignment * assignments;
+
+        void * extra;
       };
     */
     tree field, fields = NULL_TREE;
@@ -397,6 +399,9 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
 
     /* mv_assignments pointer */
     RECORD_FIELD(build_qualified_type(info_assignment_ptr_type, TYPE_QUAL_CONST));
+
+    /* user data = NULL */
+    RECORD_FIELD(build_pointer_type (void_type_node));
 
     finish_builtin_struct(info_mvfn_type, "__mv_info_mvfn", fields, NULL_TREE);
 }
@@ -429,6 +434,11 @@ static tree build_info_mvfn(mv_info_mvfn_data &mvfn_info, mv_info_ctx_t *ctx)
                            build1(ADDR_EXPR, ctx->assignment_ptr_type, assigns_ary));
 
     info_fields = DECL_CHAIN(info_fields);
+
+    /* void * extra = NULL */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN(info_fields);
+
 
     gcc_assert(!info_fields); // All fields are filled
 
