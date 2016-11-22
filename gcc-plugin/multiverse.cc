@@ -490,12 +490,13 @@ static unsigned int mv_variant_generation_execute()
         fprintf(dump_file, "...found '%d' multiverse variables (%d blacklisted)\n",
                 mv_vars.size(), mv_blacklist.size());
     }
-    std::set<tree>::iterator varit;
-    for (varit = mv_blacklist.begin(); varit != mv_blacklist.end(); varit++) {
-        mv_vars.erase(*varit);
+
+    // Remove blacklisted variables from the mv_vars set.
+    for (auto & black : mv_blacklist) {
+        mv_vars.erase(black);
     }
 
-    /* Multiverse this function w.r.t. multiverse variables */
+    // Multiverse this function w.r.t. multiverse variables
     const int numvars = mv_vars.size();
     if (numvars == 0)
         return 0;
