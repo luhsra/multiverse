@@ -234,9 +234,8 @@ static void replace_and_constify(tree old_var, const int value)
 }
 
 
-
 /*
- * Clone the current function and replace all variables in @var_map with the
+ * Clone the current function and replace all variables in @assignment with the
  * associated values.
  */
 static void multiverse_function(mv_info_fn_data &fn_info,
@@ -247,9 +246,9 @@ static void multiverse_function(mv_info_fn_data &fn_info,
     function * old_func = cfun;
     function * clone_func;
 
-    std::map<tree, int>::iterator map_iter;
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     std::stringstream ss;
+
     for (mv_variant_generator::dimension_value &val : assignment) {
         // Append variable assignments to the clone's name
         ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(val.variable));
@@ -258,10 +257,9 @@ static void multiverse_function(mv_info_fn_data &fn_info,
         else
             ss << val.value;
     }
+
     fname += ".multiverse.";
     fname += ss.str().substr(1);
-
-
 
     if (dump_file) {
         fprintf(dump_file, "generating function clone %s\n",
@@ -271,11 +269,11 @@ static void multiverse_function(mv_info_fn_data &fn_info,
     clone = clone_fndecl(fndecl, fname);
     gcc_assert(clone != fndecl);
 
-    // WTF is this doing.
     clone_func = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_func);
     mv_info_mvfn_data mvfn;
     mvfn.mvfn_decl = clone; // Store declartion for clone
+
     for (mv_variant_generator::dimension_value &val : assignment) {
         replace_and_constify(val.variable, val.value);
 
@@ -287,12 +285,9 @@ static void multiverse_function(mv_info_fn_data &fn_info,
         assign.upper_limit = val.value;
         mvfn.assignments.push_back(assign);
     }
+
     fn_info.mv_functions.push_back(mvfn);
-
-
-    DECL_ATTRIBUTES(cfun->decl) =
-        remove_attribute("multiverse", DECL_ATTRIBUTES(cfun->decl));
-
+    remove_attribute("multiverse", DECL_ATTRIBUTES(cfun->decl));
     pop_cfun();
 
     return;
