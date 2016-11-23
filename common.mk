@@ -18,12 +18,12 @@ ALLPRODUCTS += $(1).o $$($(1)_OBJS) $(1).S $(1) $(DEPDIR)/.d/$(1).d
 endef
 
 %.o : %.c
-%.o : %.c $(DEPDIR)/%.d
+%.o : %.c $(DEPDIR)/%.d $(EXTRA_DEPS)
 	$(CC) -o $@ -c $< $(CFLAGS)
 	@$(POSTCOMPILE)
 
 %.o : %.cc
-%.o : %.cc $(DEPDIR)/%.d
+%.o : %.cc $(DEPDIR)/%.d $(EXTRA_DEPS)
 	$(CXX) -o $@ -c $< $(CXXFLAGS)
 	@$(POSTCOMPILE)
 
