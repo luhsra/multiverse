@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "gcc-common.h"
 
+typedef unsigned HOST_WIDE_INT mv_value_t;
+
 /*
  * The multiverse generator is used to capture all dimensions (variables) and
  * their values for a specific multiverse function.  The variables, and the
@@ -15,7 +17,7 @@ struct mv_variant_generator {
     struct dimension_value {
         tree variable;
         const char *value_label;
-        unsigned HOST_WIDE_INT value;
+        mv_value_t value;
         unsigned score;
     };
     struct dimension {
@@ -36,7 +38,7 @@ private:
 public:
     void add_dimension(tree variable, unsigned score = 0);
     void add_dimension_value(tree variable, const char *label,
-                             unsigned HOST_WIDE_INT value, unsigned score = 0);
+                             mv_value_t value, unsigned score = 0);
     void start(unsigned maximal_elements = -1);
     bool end_p();
     variant next();

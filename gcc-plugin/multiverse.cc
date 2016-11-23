@@ -41,6 +41,53 @@ static mv_info_ctx_t mv_info_ctx;
     } while(0)
 
 
+struct mv_generation_ctx {
+    struct mv_var_attribs {
+        bool tracked;
+        std::set<mv_value_t> values; // Come from the attribute
+        std::set<mv_value_t> hints; // Are cleared after each value
+    };
+
+    std::map<tree, mv_var_attribs> vars;
+
+    void set_tracked(tree variable, bool value) {
+        if (vars.find(variable) == vars.end()) {
+            vars[variable] = mv_var_attribs();
+        }
+        vars[variable].tracked = value;
+    }
+
+    void add_user_value(tree variable, mv_value_t value) {
+        if (vars.find(variable) == vars.end()) {
+            vars[variable] = mv_var_attribs();
+        }
+        vars[variable].values.insert(value);
+    }
+
+    void add_hint_value(tree variable, mv_value_t value) {
+        if (vars.find(variable) == vars.end()) {
+            vars[variable] = mv_var_attribs();
+        }
+        vars[variable].hints.insert(value);
+    }
+
+    void clear_hints() {
+        for (auto & var : vars) var.second.hints.clear();
+    }
+
+    std::set<mv_value_t> values(tree var) {
+        std::set<mv_value_t> ret;
+        if (vars.find(var) != vars.end()) {
+            ret.insert(vars[var].values.begin(), vars[var].values.end());
+            ret.insert(vars[var].hints.begin(), vars[var].hints.end());
+        }
+        return ret;
+    }
+};
+
+struct mv_generation_ctx generation_ctx;
+
+
 /*
  * Handler for multiverse attribute of variables. Here we collect all variables
  * that are defined in this compilation unit.
@@ -56,6 +103,58 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
             mv_info_var_data mv_variable;
             mv_variable.var_decl = *node;
             mv_info_ctx.variables.push_back(mv_variable);
+        }
+        location_t loc = DECL_SOURCE_LOCATION(*node);
+        for (tree p = args; p; p = TREE_CHAIN(p)) {
+            tree elem = TREE_VALUE(p);
+            bool handled = false;
+            if (TREE_CODE(elem) == STRING_CST) {
+                std::string arg = TREE_STRING_POINTER(elem);
+                debug_printf("%s\n",arg.c_str());
+                if (arg == "tracked") {
+                    generation_ctx.set_tracked(*node, true);
+                } else {
+                    error_at(loc, "unknown multiverse attribute argument %qs",
+                             arg.c_str());
+                }
+            } else if (TREE_CODE(elem) == COMPOUND_EXPR) {
+                // ("values", 1,2,3,4)
+                std::vector<tree> stack;
+                std::string arg;
+                std::set<mv_value_t> values;
+                // Flatten the compoint structure
+                stack.push_back(elem);
+                while (!stack.empty()) {
+                    tree it = stack.back();stack.pop_back();
+                    if (TREE_CODE(it) == COMPOUND_EXPR) {
+                        stack.push_back(TREE_OPERAND(it, 0));
+                        stack.push_back(TREE_OPERAND(it, 1));
+                        // sequential recursion!
+                    } else if (TREE_CODE(it) == NOP_EXPR) {
+                        // The tag "values" is hidden after a
+                        // NOP_EXPR, NOP_EXPR chain. Therefore, we
+                        // follow it and extract the string as `arg'
+                        while(TREE_CODE(it) == ADDR_EXPR
+                              || TREE_CODE(it) == NOP_EXPR)
+                            it = TREE_OPERAND(it,0);
+                        if (TREE_CODE(it) == STRING_CST) {
+                            arg = TREE_STRING_POINTER(it);
+                        } else goto invalid_argument;
+                    } else if (TREE_CODE(it) == INTEGER_CST) {
+                        values.insert(int_cst_value(it));
+                    }
+                }
+                if (arg == "values") {
+                    for (mv_value_t val : values)
+                        generation_ctx.add_user_value(*node, val);
+                } else {
+                invalid_argument:
+                    error_at(loc, "unknown multi-valued multiverse attribute argument %qs",
+                             arg.c_str());
+                }
+            } else {
+                error_at(loc, "invalid multiverse attribute argument");
+            }
         }
     } else if (type == FUNCTION_TYPE) {
         // A function was declared as a multiversed function.  Everything is
@@ -85,7 +184,7 @@ static struct attribute_spec mv_attribute =
 {
     .name = "multiverse",
     .min_length = 0,
-    .max_length = 0,
+    .max_length = -1,
     .decl_required = true,
     .type_required = false,
     .function_type_required = false,
@@ -401,7 +500,6 @@ static unsigned int mv_variant_generation_execute()
     }
 
     std::set<tree> mv_vars;
-    std::map<tree, std::set<unsigned HOST_WIDE_INT>> mv_var_hints;
 
     std::set<tree> mv_blacklist;
     basic_block bb;
@@ -462,12 +560,8 @@ static unsigned int mv_variant_generation_execute()
 
                             if (!CONSTANT_CLASS_P(comparand)) continue;
 
-                            unsigned HOST_WIDE_INT constant = int_cst_value(comparand);
-                            if (mv_var_hints.find(var) == mv_var_hints.end()) {
-                                mv_var_hints[var] = {constant};
-                            } else {
-                                mv_var_hints[var].insert(constant);
-                            }
+                            mv_value_t constant = int_cst_value(comparand);
+                            generation_ctx.add_hint_value(var, constant);
                         }
                     }
                 }
@@ -516,8 +610,9 @@ static unsigned int mv_variant_generation_execute()
             }
         } else if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
             generator.add_dimension(variable);
-            if (mv_var_hints.find(variable) != mv_var_hints.end()) {
-                for (auto val : mv_var_hints[variable]) {
+            std::set<mv_value_t> values = generation_ctx.values(variable);
+            if (!values.empty()) {
+                for (auto val : values) {
                     generator.add_dimension_value(variable, NULL, val, 0);
                 }
             } else {
