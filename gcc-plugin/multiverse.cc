@@ -347,6 +347,12 @@ void multiverse_variant_generator::add_variable(variable_t *variable)
     }
     assert(!found && "Dimension added multiple times");
     var_assign_vector_t assignments;
+    // If the variable is marked as tracked. Undefined is also a valid
+    // assignment for the generator.
+    if (variable->tracked) {
+        // lower-label > upper_label
+        assignments.push_back({nullptr, nullptr, 1, 0});
+    }
     variables.push_back(std::make_pair(variable, assignments));
 }
 
@@ -414,7 +420,11 @@ var_assign_vector_t multiverse_variant_generator::next()
 
     // Capture current dimensions
     for (unsigned i = skip_dimensions; i < variables.size(); i++) {
-        ret.push_back(variables[i].second[state[i]]);
+        var_assign_t &assign = variables[i].second[state[i]];
+        // Is undefined? If the assignment is
+        // undefined/untracked/unbound. Don't add it as a vector
+        if (assign.lower_limit <= assign.upper_limit)
+            ret.push_back(assign);
     }
     // And increment to the next element
     state[variables.size() -1] ++;

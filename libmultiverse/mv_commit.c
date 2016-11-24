@@ -131,8 +131,16 @@ int __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
         unsigned good = 1;
         for (unsigned a = 0; a < mvfn->n_assignments; a++) {
             struct mv_info_assignment * assign = &mvfn->assignments[a];
-            mv_value_t cur = multiverse_var_read(assign->variable);
-            if (cur > assign->upper_bound || cur < assign->lower_bound) good = 0;
+            // If the assignment of this mvfn depends on an unbound
+            // variable. The mvfn is unsuitable currently.
+            if (!assign->variable->extra->bound) {
+                good = 0;
+            } else {
+                // Variable is bound
+                mv_value_t cur = multiverse_var_read(assign->variable);
+                if (cur > assign->upper_bound || cur < assign->lower_bound)
+                    good = 0;
+            }
         }
         if (good) {
             // Here we possibly override an already valid mvfn
@@ -270,4 +278,15 @@ int multiverse_revert() {
 int multiverse_is_committed(void *function_body) {
     struct mv_info_fn *fn = multiverse_info_fn(function_body);
     return fn->extra->active_mvfn != NULL;
+}
+
+int multiverse_bind(void *var_location, int state) {
+    struct mv_info_var *var = multiverse_info_var(var_location);
+    if (!var) return -1;
+
+    if (state >= 0) {
+        if (!var->flag_tracked) return -1;
+        var->extra->bound = state;
+    }
+    return var->extra->bound;
 }

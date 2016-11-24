@@ -334,8 +334,9 @@ static tree build_info_var(variable_t &var_info, multiverse_context *ctx)
     tree type = TREE_TYPE(var_info.var_decl);
     int width = int_size_in_bytes(type);
     int flag_signed = !TYPE_UNSIGNED(type);
+    int flag_tracked = !!var_info.tracked;
     gcc_assert(width < 16);
-    uint32_t info = (flag_signed << 31) | width;
+    uint32_t info = (flag_signed << 31) | (flag_tracked << 30) | width;
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                             build_int_cstu(TREE_TYPE(info_fields), info));
     info_fields = DECL_CHAIN(info_fields);

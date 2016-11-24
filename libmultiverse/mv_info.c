@@ -63,6 +63,11 @@ int multiverse_init() {
             struct mv_info_var *var = &info->variables[i];
             var->extra = calloc(1, sizeof(struct mv_info_var_extra));
             if (!var->extra) return -1;
+
+            if (var->flag_tracked)
+                var->extra->bound = 0;
+            else
+                var->extra->bound = 1;
         }
     }
 
@@ -155,8 +160,12 @@ void multiverse_dump_info(FILE *out) {
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
                 // Execute function mv_func();
-                fprintf(out, "    mvfn: %p (vars %d)\n",
+                fprintf(out, "    mvfn: %p (vars %d)",
                         mvfn->function_body, mvfn->n_assignments);
+                if (fn->extra->active_mvfn == mvfn) {
+                    fprintf(out, "<-- active");
+                }
+                fprintf(out, "\n");
                 for (unsigned x = 0; x < mvfn->n_assignments; x++) {
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
                     fprintf(out, "      assign: %s in [%d, %d]\n",
@@ -178,9 +187,11 @@ void multiverse_dump_info(FILE *out) {
         fprintf(out, "%d variables were multiversed\n", info->n_variables);
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
-            fprintf(out, "  var: %s %p (width %d), %d functions\n", var->name,
+            fprintf(out, "  var: %s %p (width %d, tracked:%d, signed:%d), %d functions\n", var->name,
                     var->variable_location,
                     var->variable_width,
+                    var->flag_tracked,
+                    var->flag_signed,
                     var->extra->n_functions);
         }
     }

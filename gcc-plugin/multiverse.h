@@ -32,9 +32,7 @@ struct multiverse_context {
 
     struct var_assign_t {
         variable_t * variable;
-
         const char * label;
-
         unsigned lower_limit;
         unsigned upper_limit;
     };
