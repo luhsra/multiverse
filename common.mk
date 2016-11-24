@@ -8,11 +8,11 @@ OBJECTS = $(patsubst %,%.o,$(basename $(SOURCES)))
 ALLPRODUCTS += $(OBJECTS)
 
 define BINARY_template
-$(1): $(1).o $$($(1)_OBJS) $$(EXTRA_DEPS)
-	$$(CC)  -o $$@ $(1).o $$($(1)_OBJS) $$(LDFLAGS)
+$(1): $$(EXTRA_DEPS) $(1).o $$($(1)_OBJS)
+	$$(CC) $$(LDFLAGS) -o $$@ $(1).o $$($(1)_OBJS) $$(LDLIBS)
 
-$(1).S: $(1).c $$(EXTRA_DEPS)
-	$$(CC)  -S -o $$@ $$(CFLAGS) $$<
+$(1).S: $$(EXTRA_DEPS) $(1).c
+	$$(CC) -S -o $$@ $$(CFLAGS) $$<
 
 ALLPRODUCTS += $(1).o $$($(1)_OBJS) $(1).S $(1) $(DEPDIR)/.d/$(1).d
 endef
