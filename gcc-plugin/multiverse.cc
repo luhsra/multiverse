@@ -42,7 +42,7 @@ static mv_info_ctx_t mv_info_ctx;
 
 
 /*
- * Handler for multiverse attribute of variables. We collect here all variables
+ * Handler for multiverse attribute of variables. Here we collect all variables
  * that are defined in this compilation unit.
  */
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
@@ -192,7 +192,7 @@ static tree clone_fndecl(tree fndecl, std::string fname)
 
 
 /*
- * Replace all occurrences of var in cfun with value.
+ * Replace all occurrences of old_var in cfun with value.
  */
 static void replace_and_constify(tree old_var, const int value)
 {
@@ -405,7 +405,7 @@ static unsigned int mv_variant_generation_execute()
 
     std::set<tree> mv_blacklist;
     basic_block bb;
-    /* Iterate of each basic block in current function. */
+    /* Iterate over each basic block in current function. */
     FOR_EACH_BB_FN(bb, cfun) {
         /* Iterate over each GIMPLE statement. */
         gimple_stmt_iterator gsi;
@@ -555,7 +555,7 @@ typedef std::vector<
 
 /*
  * For two assignment maps, we test if they differ only in one variable
- * assignment. If they differ, we furthermore test, whether their intervals are
+ * assignment. If they differ, we furthermore test whether their intervals are
  * next to each other. In this case, we merge b into a, and say: yes, we merged
  * something here.
  */
@@ -594,7 +594,7 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
 /*
  * In a mvfn selector equivalence class, all selectors point to the same mvfn
  * function body. Nevertheless, their guarding assignment maps may be different.
- * In some cases, we can reduce the number of descriptors, by merging their
+ * In some cases, we can reduce the number of descriptors by merging their
  * intervals.
  *
  * WARNING/TODO: I think this merging is not optimal

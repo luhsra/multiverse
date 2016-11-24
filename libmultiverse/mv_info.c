@@ -66,7 +66,7 @@ int multiverse_init() {
         }
     }
 
-    // Step 2: Connect all the moving parts form all compilation units
+    // Step 2: Connect all the moving parts from all compilation units
     //         and fill the extra data.
     for (info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
@@ -81,7 +81,7 @@ int multiverse_init() {
 
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
                 struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
-                // Let's see, if we can extract further information
+                // Let's see if we can extract further information
                 // for our multiverse function, like: constant return value.
                 struct mv_info_mvfn_extra extra;
                 multiverse_arch_decode_mvfn_body(mvfn->function_body, &extra);
@@ -124,7 +124,7 @@ int multiverse_init() {
         for (unsigned i = 0; i < info->n_callsites; ++i) {
             struct mv_info_callsite *cs = &info->callsites[i];
             struct mv_info_fn *fn = multiverse_info_fn(cs->function_body);
-            /* Function was not found. Perhaps there are not multiveres? */
+            /* Function was not found. Perhaps there are no multiverses? */
             if (fn == NULL) continue;
 
             // Try to find an x86 callq (e8 <offset>

@@ -60,11 +60,11 @@ static void multiverse_select_end(mv_select_ctx_t *ctx) {
 static void multiverse_select_unprotect(mv_select_ctx_t *ctx, void *addr) {
     uintptr_t pagesize = sysconf(_SC_PAGESIZE);
     void *page = (void*)((uintptr_t) addr & ~(pagesize - 1));
-    // The unprotected_pages implements a LRU cache, were element 0 is
-    // the most hottest one.
+    // The unprotected_pages implements a LRU cache, where element 0 is
+    // the hottest one.
     for (unsigned i = 0; i < ctx->cache_size; i++) {
         if (ctx->cache[i] == page) {
-            // Shift everthing one position behind
+            // Shift everthing one position up
             for (unsigned j = i; j > 0; j--) {
                 ctx->cache[j] = ctx->cache[j-1];
             }
@@ -134,7 +134,7 @@ int __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
             if (cur > assign->upper_bound || cur < assign->lower_bound) good = 0;
         }
         if (good) {
-            // Here we do possibliy override an already valid mvfn
+            // Here we possibly override an already valid mvfn
             best_mvfn = mvfn;
         }
     }

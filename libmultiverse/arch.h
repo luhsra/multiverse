@@ -18,8 +18,8 @@ void multiverse_arch_decode_callsite(struct mv_info_fn *fn, void *callsite,
 /**
   @brief decode mvfn function body
 
-  If a multiverse function body does nothing, or only returns an
-  constant value, we can further optimized the patchedb callsites
+  If a multiverse function body does nothing, or only returns a
+  constant value, we can further optimize the patched callsites
 */
 
 void multiverse_arch_decode_mvfn_body(void * addr,
@@ -33,7 +33,7 @@ void multiverse_arch_patchpoint_apply(struct mv_info_fn *fn,
                                       struct mv_patchpoint *pp);
 
 /**
-   @brief brings the code to the original form
+   @brief restores the code to the original form
 */
 void multiverse_arch_patchpoint_revert(struct mv_patchpoint *pp);
 

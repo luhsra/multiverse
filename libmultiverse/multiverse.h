@@ -129,12 +129,12 @@ struct mv_info_var *  multiverse_info_var(void * variable_location);
   This function iterates over all functions for which a multiverse
   exists. It selects the best fitting multiverse instance (mvfn) and
   installs it as the currently active variant in the code. This
-  installation is done by binary patching of the text segment.
+  installation is done by binary patching the text segment.
 
-  The function returns the number of changes functions, or -1 on
+  The function returns the number of changed functions, or -1 on
   error.
 
-  @return number of changes functions or -1 on error
+  @return number of changed functions or -1 on error
 */
 int multiverse_commit();
 
@@ -142,13 +142,13 @@ int multiverse_commit();
   @brief commit a single multiverse function
   @param fn info object identifying the function
 
-  Like multiverse commit, but operates only on a single function. All
+  Like multiverse_commit, but operates only on a single function. All
   other functions of the program remain in the current state.
 
-  The function returns the number of changes functions, or -1 on
+  The function returns the number of changed functions, or -1 on
   error.
 
-  @return number of changes functions or -1 on error
+  @return number of changed functions or -1 on error
   @sa multiverse_commit, multiverse_commit_fn
 */
 int multiverse_commit_info_fn(struct mv_info_fn *fn);
@@ -160,11 +160,11 @@ int multiverse_commit_info_fn(struct mv_info_fn *fn);
   @return number of changed functions or -1 on error
   @sa multiverse_commit
 
-  Like multiverse commit, but operates only on a single function. All
+  Like multiverse_commit, but operates only on a single function. All
   other functions of the program remain in the current state.
 
   The function returns 1, if a different mvfn was selected. 0 if
-  nothing changes, and -1 on an error.
+  nothing changes, and -1 on error.
 
   @verbatim
   void __attribute__((multiverse)) foo() {...}
@@ -182,11 +182,11 @@ int multiverse_commit_fn(void * function_body);
    @return number of changed functions or -1 on error
    @sa multiverse_commit, multiverse_commit_var
 
-   Like multiverse commit, but operates on all functions that
+   Like multiverse_commit, but operates on all functions that
    reference the given variable.
 
    The function returns 1, if a different mvfn was selected. 0 if
-   nothing changes, and -1 on an error.
+   nothing changes, and -1 on error.
 
 */
 int multiverse_commit_info_refs(struct mv_info_var *var);
@@ -198,11 +198,11 @@ int multiverse_commit_info_refs(struct mv_info_var *var);
    @return number of changed functions or -1 on error
    @sa multiverse_commit, multiverse_commit_info_var
 
-   Like multiverse commit, but operates on all functions that
+   Like multiverse_commit, but operates on all functions that
    reference the given variable.
 
    The function returns 1, if a different mvfn was selected. 0 if
-   nothing changes, and -1 on an error.
+   nothing changes, and -1 on error.
 
    @verbatim
    int __attribute__((multiverse)) config;
@@ -217,7 +217,7 @@ int multiverse_commit_refs(void * var_location);
    @brief commit a single multiverse function
    @param fn info object identifying the function
 
-   @return number of changes functions or -1 on error
+   @return number of changed functions or -1 on error
    @sa multiverse_commit, multiverse_commit_fn
 */
 
@@ -246,7 +246,7 @@ int multiverse_revert_fn(void* function_body);
    reference the given variable.
 
    The function returns 1, if a different mvfn was selected. 0 if
-   nothing changes, and -1 on an error.
+   nothing changes, and -1 on error.
 
 */
 int multiverse_revert_info_refs(struct mv_info_var *var);
@@ -278,10 +278,10 @@ int multiverse_revert_refs(void * var_location);
 int multiverse_revert();
 
 /**
-   @brief Test wheter a function is currently committed to a mulitverse varian.
+   @brief Test whether a function is currently committed to a mulitverse variant.
    @param function_body pointer to the function body
 
-   Test wheter the function body of a function is currently under the
+   Test whether the function body of a function is currently under the
    control of multiverse.
 
    @return bool

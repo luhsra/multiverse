@@ -536,13 +536,13 @@ static void build_types(mv_info_ctx_t *t)
 
 
 /*
- * Generate the constructor function to call __gcov_init.
+ * Generate the constructor function to call __multiverse_init.
  */
 static void build_init_ctor(tree mv_info_ptr_type, tree mv_info_var)
 {
     tree ctor, stmt, init_fn;
 
-    /* Build a decl for __gcov_init.  */
+    /* Build a decl for __multiverse_init.  */
     init_fn = build_function_type_list(void_type_node, mv_info_ptr_type, NULL);
     init_fn = build_decl(BUILTINS_LOCATION, FUNCTION_DECL,
                          get_identifier("__multiverse_init"), init_fn);
@@ -574,11 +574,11 @@ void mv_info_finish(void *event_data, void *data)
     // We get a constructor for the object
     tree info_obj = build_info(ctx);
 
-    /* And Initialize a variable with it */
+    /* And initialize a variable with it */
     DECL_INITIAL(info_var) = info_obj;
 
     varpool_node::finalize_decl(info_var);
 
-    // Vall __multiverse_init() on program startup
+    // Call __multiverse_init() on program startup
     build_init_ctor(ctx->info_ptr_type, info_var);
 }
