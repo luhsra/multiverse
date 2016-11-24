@@ -14,6 +14,7 @@
 #define __MULTIVERSE_H
 
 #include <stdio.h>
+#include <stdint.h>
 
 struct mv_info_var;
 struct mv_info_mvfn;
@@ -84,13 +85,24 @@ struct mv_info_callsite {
 struct mv_info_var_extra {
     unsigned int n_functions;
     struct mv_info_fn **functions;
+    char bound;
 };
 
 
 struct mv_info_var {
     char * const  name;
     void *        variable_location;
-    unsigned char variable_width;
+
+    union {
+        uint32_t info;
+        struct {
+            unsigned int
+                variable_width  : 4,
+                reserved        : 26,
+                flag_tracked    : 1,
+                flag_signed     : 1;
+        };
+    };
 
     union {
         void *data;
@@ -287,5 +299,30 @@ int multiverse_revert();
    @return bool
 */
 int multiverse_is_committed(void* function_body);
+
+/**
+   @brief Change the binding state of a variable
+   @param var_location pointer to the variable
+   @param state the new binding state.
+     - 1 if variable should be bound
+     - 0 if variable should be unbound
+     - -1 to query the binding state
+
+   If a variable is attributed with multiverse("tracked"), the
+   variable is not binded by default with multiverse_commit, since its
+   binding state is unbound. With this function, we can change the
+   binding state.
+
+   This function will only work on "tracked" variables.
+
+   Please note, that the commit operation has to be done explicitly!
+
+   @return new binding state or error
+      - 0   if variable is unbound
+      - 1   if variable is bound
+      - -1  if variable was not marked as "tracked"
+*/
+int multiverse_bind(void* var_location, int state);
+
 
 #endif

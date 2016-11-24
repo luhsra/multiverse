@@ -13,13 +13,14 @@ extern struct mv_info *mv_information;
 
 static mv_value_t multiverse_var_read(struct mv_info_var *var) {
     mv_value_t ret;
-    if (var->variable_width = sizeof(unsigned char)) {
+    if (var->variable_width == sizeof(unsigned char)) {
         return *(unsigned char *)var->variable_location;
-    } else if (var->variable_width = sizeof(unsigned short)) {
+    } else if (var->variable_width == sizeof(unsigned short)) {
         return *(unsigned short *)var->variable_location;
-    } else if (var->variable_width = sizeof(unsigned int)) {
+    } else if (var->variable_width == sizeof(unsigned int)) {
         return *(unsigned int *)var->variable_location;
     }
+    fprintf(stderr, "%x\n", var->info);
     assert (0 && "Invalid width of multiverse variable. This should not happen");
 }
 

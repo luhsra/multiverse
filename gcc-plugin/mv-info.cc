@@ -1,15 +1,21 @@
 #include "gcc-common.h"
 #include <tree-iterator.h>
 #include <sstream>
-#include "mv-info.h"
 #include "multiverse.h"
 
+typedef multiverse_context::func_t func_t;
+typedef multiverse_context::variable_t variable_t;
+typedef multiverse_context::var_assign_t var_assign_t;
+typedef multiverse_context::mvfn_t mvfn_t;
+typedef multiverse_context::callsite_t callsite_t;
 
-static tree build_info_fn(mv_info_fn_data &, mv_info_ctx_t *);
-static tree build_info_var(mv_info_var_data &, mv_info_ctx_t *);
-static tree build_info_callsite(mv_info_callsite_data &, mv_info_ctx_t *);
-static tree build_info_mvfn(mv_info_mvfn_data &, mv_info_ctx_t *);
-static tree build_info_assignment(mv_info_assignment_data &, mv_info_ctx_t *);
+
+
+static tree build_info_fn(func_t &, multiverse_context *);
+static tree build_info_var(variable_t &, multiverse_context *);
+static tree build_info_callsite(callsite_t &, multiverse_context *);
+static tree build_info_mvfn(mvfn_t &, multiverse_context *);
+static tree build_info_assignment(var_assign_t &, multiverse_context *);
 
 
 static tree get_mv_unsigned_t(void)
@@ -43,8 +49,8 @@ static tree build_var(tree type, std::string prefix)
 template<typename Seq, typename T>
 static tree build_array_from_list(Seq &elements,
                                   tree element_type,
-                                  tree (*build_obj_ptr)(T&, mv_info_ctx_t*),
-                                  mv_info_ctx_t *ctx)
+                                  tree (*build_obj_ptr)(T&, multiverse_context*),
+                                  multiverse_context *ctx)
 {
     tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_QUAL_CONST),
                                      build_index_type(size_int(elements.size())));
@@ -120,7 +126,7 @@ static void build_info_type(tree info_type,
     finish_builtin_struct(info_type, "__mv_info", fields, NULL_TREE);
 }
 
-static tree build_info(mv_info_ctx_t *ctx) {
+static tree build_info(multiverse_context *ctx) {
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->info_type);
@@ -214,7 +220,7 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
 }
 
 
-static tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx)
+static tree build_info_fn(func_t &fn_info, multiverse_context *ctx)
 {
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
@@ -265,14 +271,20 @@ static tree build_info_fn(mv_info_fn_data &fn_info, mv_info_ctx_t *ctx)
 }
 
 
-static void build_info_var_type(tree info_var_type)
+static void build_info_variable_type(tree info_variable_type)
 {
     /*
       struct __mv_info_var {
         char * const name;
 
         void * variable;
-        unsigned char width;
+        struct {
+              unsigned int
+                 flag_signed     : 1,
+                 flag_tracked    : 1,
+                 reserved        : 26,
+                 variable_width  : 4;
+        } __attribute__((packed));
 
         void * data;
       };
@@ -285,17 +297,17 @@ static void build_info_var_type(tree info_var_type)
     /* Pointer to variable */
     RECORD_FIELD(build_pointer_type(void_type_node));
 
-    /* width */
-    RECORD_FIELD(unsigned_char_type_node);
+    /* info - uint32_t */
+    RECORD_FIELD(uint32_type_node);
 
     /* void * data */
     RECORD_FIELD(build_pointer_type(void_type_node));
 
-    finish_builtin_struct(info_var_type, "__mv_info_var", fields, NULL_TREE);
+    finish_builtin_struct(info_variable_type, "__mv_info_var", fields, NULL_TREE);
 }
 
 
-static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
+static tree build_info_var(variable_t &var_info, multiverse_context *ctx)
 {
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->var_type);
@@ -318,10 +330,14 @@ static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
                                   var_info.var_decl));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* width of referenced varibale */
-    int width = int_size_in_bytes(TREE_TYPE(var_info.var_decl));
+    /* information about the variable */
+    tree type = TREE_TYPE(var_info.var_decl);
+    int width = int_size_in_bytes(type);
+    int flag_signed = !TYPE_UNSIGNED(type);
+    gcc_assert(width < 16);
+    uint32_t info = (flag_signed << 31) | width;
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                            build_int_cstu(TREE_TYPE(info_fields), width));
+                            build_int_cstu(TREE_TYPE(info_fields), info));
     info_fields = DECL_CHAIN(info_fields);
 
     /* void * data Filled by Runtime System */
@@ -334,7 +350,7 @@ static tree build_info_var(mv_info_var_data &var_info, mv_info_ctx_t *ctx)
 }
 
 
-static void build_info_callsite_type(tree info_var_type)
+static void build_info_callsite_type(tree info_variable_type)
 {
     /*
       struct __mv_info_callsite {
@@ -350,10 +366,10 @@ static void build_info_callsite_type(tree info_var_type)
     /* label_before */
     RECORD_FIELD(build_pointer_type (void_type_node));
 
-    finish_builtin_struct(info_var_type, "__mv_info_callsite", fields, NULL_TREE);
+    finish_builtin_struct(info_variable_type, "__mv_info_callsite", fields, NULL_TREE);
 }
 
-static tree build_info_callsite(mv_info_callsite_data &cs_info, mv_info_ctx_t *ctx)
+static tree build_info_callsite(callsite_t &cs_info, multiverse_context *ctx)
 {
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->callsite_type);
@@ -407,7 +423,7 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
 }
 
 
-static tree build_info_mvfn(mv_info_mvfn_data &mvfn_info, mv_info_ctx_t *ctx)
+static tree build_info_mvfn(mvfn_t &mvfn_info, multiverse_context *ctx)
 {
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->mvfn_type);
@@ -474,7 +490,7 @@ static void build_info_assignment_type(tree info_assignment_type, tree info_var_
 
 
 static tree
-build_info_assignment(mv_info_assignment_data &assign_info, mv_info_ctx_t *ctx)
+build_info_assignment(var_assign_t &assign_info, multiverse_context *ctx)
 {
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->assignment_type);
@@ -484,7 +500,7 @@ build_info_assignment(mv_info_assignment_data &assign_info, mv_info_ctx_t *ctx)
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR,
                                   build_pointer_type(void_type_node),
-                                  assign_info.var_decl));
+                                  assign_info.variable->var_decl));
     info_fields = DECL_CHAIN(info_fields);
 
     /* lower limit */
@@ -509,7 +525,7 @@ build_info_assignment(mv_info_assignment_data &assign_info, mv_info_ctx_t *ctx)
 
 #undef RECORD_FIELD
 
-static void build_types(mv_info_ctx_t *t)
+static void build_types(multiverse_context *t)
 {
     t->info_type = lang_hooks.types.make_type(RECORD_TYPE);
     t->fn_type = lang_hooks.types.make_type(RECORD_TYPE);
@@ -528,7 +544,7 @@ static void build_types(mv_info_ctx_t *t)
 
     build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type, t->callsite_ptr_type);
     build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
-    build_info_var_type(t->var_type);
+    build_info_variable_type(t->var_type);
     build_info_mvfn_type(t->mvfn_type, t->assignment_ptr_type);
     build_info_assignment_type(t->assignment_type, t->var_ptr_type);
     build_info_callsite_type(t->callsite_type);
@@ -563,12 +579,12 @@ static void build_init_ctor(tree mv_info_ptr_type, tree mv_info_var)
 
 void mv_info_init(void *event_data, void *data)
 {
-    build_types((mv_info_ctx_t *) data);
+    build_types((multiverse_context *) data);
 }
 
 void mv_info_finish(void *event_data, void *data)
 {
-    mv_info_ctx_t *ctx = (mv_info_ctx_t *) data;
+    multiverse_context *ctx = (multiverse_context *) data;
     tree info_var = build_var(ctx->info_type, "__mv_info_");
 
     // We get a constructor for the object

@@ -20,17 +20,26 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <set>
+
 
 #include "gcc-common.h"
 #include "multiverse.h"
-#include "mv-info.h"
+
+// We work with these types, all the time. Therefore just use an alias
+// here.
+typedef multiverse_context::func_t func_t;
+typedef multiverse_context::variable_t variable_t;
+typedef multiverse_context::var_assign_t var_assign_t;
+typedef multiverse_context::var_assign_vector_t var_assign_vector_t;
+typedef multiverse_context::mvfn_t mvfn_t;
+typedef multiverse_context::callsite_t callsite_t;
+
 
 
 int plugin_is_GPL_compatible;
 
 struct plugin_info mv_plugin_info = { .version = "42" };
-
-static mv_info_ctx_t mv_info_ctx;
 
 #define dump_file stderr
 
@@ -41,52 +50,7 @@ static mv_info_ctx_t mv_info_ctx;
     } while(0)
 
 
-struct mv_generation_ctx {
-    struct mv_var_attribs {
-        bool tracked;
-        std::set<mv_value_t> values; // Come from the attribute
-        std::set<mv_value_t> hints; // Are cleared after each value
-    };
-
-    std::map<tree, mv_var_attribs> vars;
-
-    void set_tracked(tree variable, bool value) {
-        if (vars.find(variable) == vars.end()) {
-            vars[variable] = mv_var_attribs();
-        }
-        vars[variable].tracked = value;
-    }
-
-    void add_user_value(tree variable, mv_value_t value) {
-        if (vars.find(variable) == vars.end()) {
-            vars[variable] = mv_var_attribs();
-        }
-        vars[variable].values.insert(value);
-    }
-
-    void add_hint_value(tree variable, mv_value_t value) {
-        if (vars.find(variable) == vars.end()) {
-            vars[variable] = mv_var_attribs();
-        }
-        vars[variable].hints.insert(value);
-    }
-
-    void clear_hints() {
-        for (auto & var : vars) var.second.hints.clear();
-    }
-
-    std::set<mv_value_t> values(tree var) {
-        std::set<mv_value_t> ret;
-        if (vars.find(var) != vars.end()) {
-            ret.insert(vars[var].values.begin(), vars[var].values.end());
-            ret.insert(vars[var].hints.begin(), vars[var].hints.end());
-        }
-        return ret;
-    }
-};
-
-struct mv_generation_ctx generation_ctx;
-
+struct multiverse_context mv_ctx;
 
 /*
  * Handler for multiverse attribute of variables. Here we collect all variables
@@ -98,21 +62,18 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
     int type = TREE_CODE(TREE_TYPE(*node));
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE) {
-        // We encountered a enumeral/int type. Therefore it should be a variable.
-        if (!DECL_EXTERNAL(*node)) { // Defined in this compilation unit.
-            mv_info_var_data mv_variable;
-            mv_variable.var_decl = *node;
-            mv_info_ctx.variables.push_back(mv_variable);
-        }
+        tree var_decl = *node;
+        variable_t &var_info
+            = mv_ctx.add_variable(var_decl);
+
         location_t loc = DECL_SOURCE_LOCATION(*node);
         for (tree p = args; p; p = TREE_CHAIN(p)) {
             tree elem = TREE_VALUE(p);
             bool handled = false;
             if (TREE_CODE(elem) == STRING_CST) {
                 std::string arg = TREE_STRING_POINTER(elem);
-                debug_printf("%s\n",arg.c_str());
                 if (arg == "tracked") {
-                    generation_ctx.set_tracked(*node, true);
+                    var_info.tracked = true;
                 } else {
                     error_at(loc, "unknown multiverse attribute argument %qs",
                              arg.c_str());
@@ -145,8 +106,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                     }
                 }
                 if (arg == "values") {
-                    for (mv_value_t val : values)
-                        generation_ctx.add_user_value(*node, val);
+                    var_info.values.insert(values.begin(), values.end());
                 } else {
                 invalid_argument:
                     error_at(loc, "unknown multi-valued multiverse attribute argument %qs",
@@ -330,8 +290,8 @@ static void replace_and_constify(tree old_var, const int value)
  * Clone the current function and replace all variables in @assignment with the
  * associated values.
  */
-static void multiverse_function(mv_info_fn_data &fn_info,
-                                mv_variant_generator::variant assignment)
+static void multiverse_function(func_t &fn_info,
+                                var_assign_vector_t assignments)
 {
     tree fndecl = cfun->decl;
     tree clone;
@@ -341,13 +301,13 @@ static void multiverse_function(mv_info_fn_data &fn_info,
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
     std::stringstream ss;
 
-    for (mv_variant_generator::dimension_value &val : assignment) {
+    for ( var_assign_t &assign : assignments) {
         // Append variable assignments to the clone's name
-        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(val.variable));
-        if (val.value_label)
-            ss << val.value_label;
+        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl));
+        if (assign.label)
+            ss << assign.label;
         else
-            ss << val.value;
+            ss << assign.lower_limit;
     }
 
     fname += ".multiverse.";
@@ -363,19 +323,12 @@ static void multiverse_function(mv_info_fn_data &fn_info,
 
     clone_func = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_func);
-    mv_info_mvfn_data mvfn;
+    mvfn_t mvfn;
     mvfn.mvfn_decl = clone; // Store declaration for clone
+    mvfn.assignments = assignments;
 
-    for (mv_variant_generator::dimension_value &val : assignment) {
-        replace_and_constify(val.variable, val.value);
-
-        // Save the information about the assignment
-        mv_info_assignment_data assign;
-        assign.var_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(val.variable));
-        assign.var_decl = val.variable;
-        assign.lower_limit = val.value;
-        assign.upper_limit = val.value;
-        mvfn.assignments.push_back(assign);
+    for ( var_assign_t &assign : assignments) {
+        replace_and_constify(assign.variable->var_decl, assign.lower_limit);
     }
 
     fn_info.mv_functions.push_back(mvfn);
@@ -386,52 +339,46 @@ static void multiverse_function(mv_info_fn_data &fn_info,
 }
 
 
-void mv_variant_generator::add_dimension(tree variable, unsigned score)
+void multiverse_variant_generator::add_variable(variable_t *variable)
 {
     bool found = false;
-    for (const auto &item : dimensions) {
-        found |= (item.variable == variable);
+    for (const auto &item : variables) {
+        found |= (item.first == variable);
     }
     assert(!found && "Dimension added multiple times");
-    dimensions.push_back({variable, score});
+    var_assign_vector_t assignments;
+    variables.push_back(std::make_pair(variable, assignments));
 }
 
 
-void mv_variant_generator::add_dimension_value(tree variable,
+void multiverse_variant_generator::add_variable_value(variable_t *variable,
                                                const char *label,
-                                               unsigned HOST_WIDE_INT value,
-                                               unsigned score)
+                                               mv_value_t value)
 {
     bool found = false;
-    for (auto &dim : dimensions) {
-        if (dim.variable == variable) {
+    for (auto &var : variables) {
+        if (var.first == variable) {
             found = true;
-            dim.values.push_back({variable, label, value, score});
-            dim.score += score;
+            var_assign_t assign;
+            assign.variable = variable;
+            assign.lower_limit = value;
+            assign.upper_limit = value;
+            assign.label = label;
+            var.second.push_back(assign);
         }
     }
     assert(found && "Dimension not found");
 }
 
 
-void mv_variant_generator::start(unsigned maximal_elements)
+void multiverse_variant_generator::start(unsigned maximal_elements)
 {
+    state.clear();
+    for (unsigned i = 0; i < variables.size(); ++i)
+        state.push_back(0);
     // First, we sort dimensions and dimension values according to
     // their score. The highest scores are sorted to the front
-    state.clear();
-    for (auto &dim : dimensions) {
-        std::sort(dim.values.begin(), dim.values.end(),
-                  [](dimension_value &a, dimension_value &b) {
-                      return b.score > a.score;
-                  });
-        state.push_back(0);
-    }
-    std::sort(dimensions.begin(), dimensions.end(),
-              [](dimension &a, dimension &b) {
-                  return b.score > a.score;
-              });
-
-    // TODO: what is an "unimportant" dimension?
+    // FIXME: Use a proper sorting scheme here.
 
     // We calculate how many "unimportant" dimensions are skipped,
     // since we never will variante in their assignment, because
@@ -440,8 +387,8 @@ void mv_variant_generator::start(unsigned maximal_elements)
         skip_dimensions = 0;
     } else {
         unsigned long long strength = 1;
-        for (unsigned i = dimensions.size() - 1; i >= 0; --i) {
-            strength *= dimensions[i].values.size();
+        for (unsigned i = variables.size() - 1; i >= 0; --i) {
+            strength *= variables[i].second.size();
             if (strength >= maximal_elements ) {
                 skip_dimensions = i;
                 break;
@@ -453,27 +400,27 @@ void mv_variant_generator::start(unsigned maximal_elements)
 }
 
 
-bool mv_variant_generator::end_p()
+bool multiverse_variant_generator::end_p()
 {
     return ((element_count >= maximal_elements)
-            || state[0] >= dimensions[0].values.size());
+            || state[0] >= variables[0].second.size());
 }
 
 
-mv_variant_generator::variant mv_variant_generator::next()
+var_assign_vector_t multiverse_variant_generator::next()
 {
-    variant ret;
+    var_assign_vector_t ret;
     if (end_p()) return ret; // Generator ended
 
     // Capture current dimensions
-    for (unsigned i = skip_dimensions; i < dimensions.size(); i++) {
-        ret.push_back(dimensions[i].values[state[i]]);
+    for (unsigned i = skip_dimensions; i < variables.size(); i++) {
+        ret.push_back(variables[i].second[state[i]]);
     }
     // And increment to the next element
-    state[dimensions.size() -1] ++;
+    state[variables.size() -1] ++;
     // Overflow for all dimensions but first one i != 0
-    for (unsigned i = dimensions.size() - 1; i > 0; --i) {
-        if (state[i] >= dimensions[i].values.size()) {
+    for (unsigned i = variables.size() - 1; i > 0; --i) {
+        if (state[i] >= variables[i].second.size()) {
             state[i] = 0;
             state[i-1] ++;
         }
@@ -499,7 +446,7 @@ static unsigned int mv_variant_generation_execute()
         return 0;
     }
 
-    std::set<tree> mv_vars;
+    std::map<tree, std::set<mv_value_t>> mv_vars;
 
     std::set<tree> mv_blacklist;
     basic_block bb;
@@ -541,6 +488,11 @@ static unsigned int mv_variant_generation_execute()
                     print_generic_stmt(dump_file, var, 0);
                 }
 
+                // Insert variable. Initially without hints
+                if (mv_vars.find(var) == mv_vars.end()) {
+                    mv_vars[var] = std::set<mv_value_t>();
+                }
+
                 if (gimple_num_ops(stmt) == 2 && TREE_CODE(TREE_TYPE(var)) == INTEGER_TYPE) {
                     // We can try to guess the value
                     fprintf(stderr, "guess!");
@@ -561,11 +513,10 @@ static unsigned int mv_variant_generation_execute()
                             if (!CONSTANT_CLASS_P(comparand)) continue;
 
                             mv_value_t constant = int_cst_value(comparand);
-                            generation_ctx.add_hint_value(var, constant);
+                            mv_vars[var].insert(constant);
                         }
                     }
                 }
-                mv_vars.insert(var);
             }
         }
     }
@@ -593,44 +544,63 @@ static unsigned int mv_variant_generation_execute()
      * generators to generate all of them */
 
     //TODO: comments for the code below & for the mv_variant_generator_decl
-    mv_variant_generator generator;
-    for (auto & variable : mv_vars) {
-        if (TREE_CODE(TREE_TYPE(variable)) == ENUMERAL_TYPE) {
-            generator.add_dimension(variable);
+    multiverse_variant_generator generator;
+    for (auto & item : mv_vars) {
+        auto &variable = item.first;
+        auto &hints = item.second;
 
-            tree element;
-            for (element = TYPE_VALUES (TREE_TYPE (variable));
-                 element != NULL_TREE;
-                 element = TREE_CHAIN (element)) {
-                const char * label = IDENTIFIER_POINTER(TREE_PURPOSE(element));
-                if (tree_fits_uhwi_p (TREE_VALUE (element))) {
-                    unsigned HOST_WIDE_INT val = tree_to_uhwi (TREE_VALUE (element));
-                    generator.add_dimension_value(variable, label, val, 1);
+        variable_t *var_info =
+            mv_ctx.get_variable(variable);
+
+        // We reference the variable in this function. Therefore, we
+        // add it to the current variant generator instance.
+        generator.add_variable(var_info);
+
+        // If there are explicit values, we add only these to the
+        // generator
+        if (!var_info->values.empty()) {
+            for (auto val : var_info->values) {
+                generator.add_variable_value(var_info, NULL, val);
+            }
+        } else {
+            // Ok no explicit values. Start guessing.
+            // For enumeration types: we add all enumeration values
+            if (TREE_CODE(TREE_TYPE(variable)) == ENUMERAL_TYPE) {
+                tree element;
+                for (element = TYPE_VALUES (TREE_TYPE (variable));
+                     element != NULL_TREE;
+                     element = TREE_CHAIN (element)) {
+                    const char * label = IDENTIFIER_POINTER(TREE_PURPOSE(element));
+                    if (tree_fits_uhwi_p (TREE_VALUE (element))) {
+                        mv_value_t val = tree_to_uhwi (TREE_VALUE (element));
+                        generator.add_variable_value(var_info, label, val);
+                    }
                 }
             }
-        } else if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
-            generator.add_dimension(variable);
-            std::set<mv_value_t> values = generation_ctx.values(variable);
-            if (!values.empty()) {
-                for (auto val : values) {
-                    generator.add_dimension_value(variable, NULL, val, 0);
+            // For integer types, we add the hints, we extracted from this function body, or
+            // [0,1] as a default
+            if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
+                if (!hints.empty()) {
+                    for (auto val : hints) {
+                        generator.add_variable_value(var_info, NULL, val);
+                    }
+                } else {
+                    generator.add_variable_value(var_info, NULL, 0);
+                    generator.add_variable_value(var_info, NULL, 1);
                 }
-            } else {
-                generator.add_dimension_value(variable, NULL, 0, 0);
-                generator.add_dimension_value(variable, NULL, 1, 0);
             }
         }
     }
 
     // The Generator is filled with data about our variables. Let's
     // generate all variants for this function
-    mv_info_ctx.functions.push_back(mv_info_fn_data());
-    mv_info_fn_data &fn_data = mv_info_ctx.functions.back();
+    mv_ctx.functions.push_back(func_t());
+    func_t &fn_data = mv_ctx.functions.back();
     fn_data.fn_decl = cfun->decl;
 
     generator.start();
     while (!generator.end_p()) {
-        std::vector<mv_variant_generator::dimension_value> assignment;
+        var_assign_vector_t assignment;
         assignment = generator.next();
         multiverse_function(fn_data, assignment);
     }
@@ -644,7 +614,7 @@ static unsigned int mv_variant_generation_execute()
 #include "gcc-generate-gimple-pass.h"
 
 typedef std::vector<
-    std::pair<mv_info_mvfn_data*,
+    std::pair<mvfn_t*,
               ipa_icf::sem_function *>> equivalence_class;
 
 
@@ -655,8 +625,8 @@ typedef std::vector<
  * something here.
  */
 static bool
-merge_if_possible(std::vector<mv_info_assignment_data> &a,
-                  std::vector<mv_info_assignment_data> &b)
+merge_if_possible(std::vector<var_assign_t> &a,
+                  std::vector<var_assign_t> &b)
 {
     if (a.size() != b.size()) return false;
 
@@ -664,7 +634,8 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
     bool compatible = false;
     unsigned lower, upper;
     for (unsigned i = 0; i < a.size() ; i++) {
-        assert(a[i].var_decl == b[i].var_decl);
+        assert(a[i].variable->var_decl
+               == b[i].variable->var_decl);
         if (a[i].lower_limit == b[i].lower_limit
             && a[i].upper_limit == b[i].upper_limit)
             continue;
@@ -695,7 +666,7 @@ merge_if_possible(std::vector<mv_info_assignment_data> &a,
  * WARNING/TODO: I think this merging is not optimal
  */
 static
-int merge_mvfn_selectors(struct mv_info_fn_data &fn_info,
+int merge_mvfn_selectors(func_t &fn_info,
                          equivalence_class &ec)
 {
     debug_printf("\nmerge mvfn descriptors for: %s\n",
@@ -759,7 +730,7 @@ static unsigned int mv_variant_elimination_execute()
     bitmap_obstack bmstack;
     bitmap_obstack_initialize(&bmstack);
 
-    for (auto &fn_info : mv_info_ctx.functions) {
+    for (auto &fn_info : mv_ctx.functions) {
         debug_printf("\nmerge function bodies for: %s\n",
                      IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
 
@@ -862,10 +833,10 @@ static unsigned int mv_callsites_execute()
                 PUT_CODE(label, NOTE);
                 NOTE_KIND(label) = NOTE_INSN_DELETED_LABEL;
 
-                mv_info_callsite_data callsite;
+                callsite_t callsite;
                 callsite.fn_decl = decl;
                 callsite.callsite_label = tree_label;
-                mv_info_ctx.callsites.push_back(callsite);
+                mv_ctx.callsites.push_back(callsite);
             }
         }
     }
@@ -895,7 +866,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     }
 
     // Initialize types and the multiverse info structures.
-    register_callback(plugin_name, PLUGIN_START_UNIT, mv_info_init, &mv_info_ctx);
+    register_callback(plugin_name, PLUGIN_START_UNIT, mv_info_init, &mv_ctx);
 
     // Register plugin information
     register_callback(plugin_name, PLUGIN_INFO, NULL, &mv_plugin_info);
@@ -925,7 +896,7 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_callsites_info);
 
     // Finish off the generation of multiverse info
-    register_callback(plugin_name, PLUGIN_FINISH_UNIT, mv_info_finish, &mv_info_ctx);
+    register_callback(plugin_name, PLUGIN_FINISH_UNIT, mv_info_finish, &mv_ctx);
 
     return 0;
 }
