@@ -1,4 +1,4 @@
-CC = gcc
+CC ?= gcc
 CFLAGS = -gdwarf-2
 SOURCES=$(shell echo *.c)
 
