@@ -95,7 +95,7 @@ void multiverse_arch_patchpoint_revert(struct mv_patchpoint *pp) {
     unsigned char *location = pp->location;
     // Revert to original state
     memcpy(pp->location, &pp->swapspace[0], 5);
-    printf("patch %p: original\n", pp->location, location);
+    printf("patch %p: original\n", pp->location);
     __clear_cache(location, location+5);
 
 }

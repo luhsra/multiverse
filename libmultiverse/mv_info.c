@@ -18,7 +18,6 @@ void __multiverse_init(struct mv_info *info) {
 
 struct mv_info_var *
 multiverse_info_var(void  *variable_location) {
-    struct mv_info *info = mv_information;
     for (struct mv_info * info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_variables; ++i) {
             struct mv_info_var *var = &info->variables[i];
@@ -132,7 +131,7 @@ int multiverse_init() {
             /* Function was not found. Perhaps there are no multiverses? */
             if (fn == NULL) continue;
 
-            // Try to find an x86 callq (e8 <offset>
+            // Try to find an x86 callq (e8 <offset>)
             struct mv_patchpoint pp;
             multiverse_arch_decode_callsite(fn, cs->call_label, &pp);
             if (pp.type != PP_TYPE_INVALID) {
@@ -140,11 +139,12 @@ int multiverse_init() {
                 mv_info_fn_patchpoint_append(fn, pp);
             } else {
                 char *p = cs->call_label;
-                fprintf(stderr, "Could not decode callsite at %p for %s [%x, %x, %x, %x, %x]=%lx\n", p,
-                        fn->name, p[0], p[1], p[2], p[3], p[4]);
+                fprintf(stderr, "Could not decode callsite at %p for %s [%x, %x, %x, %x, %x]\n",
+                        p, fn->name, p[0], p[1], p[2], p[3], p[4]);
             }
         }
     }
+    return 0;
 }
 
 void multiverse_dump_info(FILE *out) {

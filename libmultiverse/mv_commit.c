@@ -12,7 +12,6 @@
 extern struct mv_info *mv_information;
 
 static mv_value_t multiverse_var_read(struct mv_info_var *var) {
-    mv_value_t ret;
     if (var->variable_width == sizeof(unsigned char)) {
         return *(unsigned char *)var->variable_location;
     } else if (var->variable_width == sizeof(unsigned short)) {
