@@ -24,7 +24,7 @@ static mv_value_t multiverse_var_read(struct mv_info_var *var) {
 }
 
 typedef struct {
-    int cache_size;
+    unsigned int cache_size;
     void *cache[10];
 } mv_select_ctx_t;
 
