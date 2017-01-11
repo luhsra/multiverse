@@ -5,7 +5,7 @@
 # 	- gcc-$VERSION-plugin-dev
 
 GCCPLUGINS_DIR:= $(shell $(CXX) -print-file-name=plugin)
-CXXFLAGS += -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -gdwarf-2
+CXXFLAGS += -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -gdwarf-2 -Wall -Wextra
 SOURCES=$(shell echo *.cc)
 ALLPRODUCTS=multiverse.so
 

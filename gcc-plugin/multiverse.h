@@ -117,7 +117,7 @@ public:
     void add_variable(variable_t *);
     void add_variable_value(variable_t *, const char *label, mv_value_t value);
 
-    void start(unsigned maximal_elements = -1);
+    void start(int maximal_elements = -1);
     bool end_p();
     var_assign_vector_t next();
 };

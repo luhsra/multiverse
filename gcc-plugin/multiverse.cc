@@ -39,7 +39,10 @@ typedef multiverse_context::callsite_t callsite_t;
 
 int plugin_is_GPL_compatible;
 
-struct plugin_info mv_plugin_info = { .version = "42" };
+struct plugin_info mv_plugin_info = {
+    .version = "42",
+    .help = "function multiversing plugin\n"
+};
 
 #define dump_file stderr
 
@@ -69,7 +72,6 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         location_t loc = DECL_SOURCE_LOCATION(*node);
         for (tree p = args; p; p = TREE_CHAIN(p)) {
             tree elem = TREE_VALUE(p);
-            bool handled = false;
             if (TREE_CODE(elem) == STRING_CST) {
                 std::string arg = TREE_STRING_POINTER(elem);
                 if (arg == "tracked") {
@@ -268,7 +270,7 @@ static void replace_and_constify(tree old_var, const int value)
             }
 
             // check if any operand is a multiverse variable
-            for (int num = 1; num < gimple_num_ops(stmt); num++) {
+            for (unsigned num = 1; num < gimple_num_ops(stmt); num++) {
                 tree var = gimple_op(stmt, num);
                 if (var != old_var)
                     continue;
@@ -295,7 +297,6 @@ static void multiverse_function(func_t &fn_info,
 {
     tree fndecl = cfun->decl;
     tree clone;
-    function * old_func = cfun;
     function * clone_func;
 
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl));
@@ -314,8 +315,7 @@ static void multiverse_function(func_t &fn_info,
     fname += ss.str().substr(1);
 
     if (dump_file) {
-        fprintf(dump_file, "generating function clone %s\n",
-                fname.c_str(), IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fndecl)));
+        fprintf(dump_file, "generating function clone %s\n", fname.c_str());
     }
 
     clone = clone_fndecl(fndecl, fname);
@@ -377,7 +377,7 @@ void multiverse_variant_generator::add_variable_value(variable_t *variable,
 }
 
 
-void multiverse_variant_generator::start(unsigned maximal_elements)
+void multiverse_variant_generator::start(int maximal_elements)
 {
     state.clear();
     for (unsigned i = 0; i < variables.size(); ++i)
@@ -393,9 +393,9 @@ void multiverse_variant_generator::start(unsigned maximal_elements)
         skip_dimensions = 0;
     } else {
         unsigned long long strength = 1;
-        for (unsigned i = variables.size() - 1; i >= 0; --i) {
+        for (int i = variables.size() - 1; i >= 0; --i) {
             strength *= variables[i].second.size();
-            if (strength >= maximal_elements ) {
+            if (strength >= (unsigned) maximal_elements ) {
                 skip_dimensions = i;
                 break;
             }
@@ -464,10 +464,8 @@ static unsigned int mv_variant_generation_execute()
     FOR_EACH_BB_FN(bb, cfun) {
         /* Iterate over each GIMPLE statement. */
         gimple_stmt_iterator gsi;
-        gimple last_stmt = NULL;
         gimple stmt = NULL;
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
-            last_stmt = stmt;
             stmt = gsi_stmt(gsi);
 
             if (!is_gimple_assign(stmt)) {
@@ -487,7 +485,7 @@ static unsigned int mv_variant_generation_execute()
             }
 
             /* Check if any operand is a multiverse variable */
-            for (int num = 1; num < gimple_num_ops(stmt); num++) {
+            for (unsigned num = 1; num < gimple_num_ops(stmt); num++) {
                 tree var = gimple_op(stmt, num);
 
                 if (!is_multiverse_var(var))
@@ -532,7 +530,7 @@ static unsigned int mv_variant_generation_execute()
     }
 
     if (dump_file) {
-        fprintf(dump_file, "...found '%d' multiverse variables (%d blacklisted)\n",
+        fprintf(dump_file, "...found '%ld' multiverse variables (%ld blacklisted)\n",
                 mv_vars.size(), mv_blacklist.size());
     }
 
@@ -774,7 +772,7 @@ static unsigned int mv_variant_elimination_execute()
             }
         }
         for (auto &ec : classes) {
-            debug_printf("found function equivalence class of size %d\n", ec.size());
+            debug_printf("found function equivalence class of size %ld\n", ec.size());
             /* If multiple multiverse functions are equivalent. Let
                them all point to the same function body. */
             if (ec.size() > 1) {
@@ -795,7 +793,7 @@ static unsigned int mv_variant_elimination_execute()
                 // ec = [(a=0, b=0), (a=0, b=1), (a=1, b=0)]
                 // Then it would be sufficient to expose the following terms
                 merge_mvfn_selectors(fn_info, ec);
-                debug_printf(".. reduced to size %d\n", ec.size());
+                debug_printf(".. reduced to size %ld\n", ec.size());
             }
         }
         // Cleanup of sem_function *
