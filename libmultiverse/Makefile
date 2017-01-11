@@ -1,4 +1,5 @@
-CC ?= gcc
+MY_CC ?= gcc
+CC = $(MY_CC)
 CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99
 SOURCES=$(shell echo *.c)
 

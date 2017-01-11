@@ -1,4 +1,5 @@
-CC ?= gcc
+MY_CC ?= gcc
+CC = $(MY_CC)
 
 PLUGIN_DIR=../gcc-plugin
 PLUGIN=$(PLUGIN_DIR)/multiverse.so
