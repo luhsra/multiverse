@@ -10,6 +10,9 @@ typedef multiverse_context::mvfn_t mvfn_t;
 typedef multiverse_context::callsite_t callsite_t;
 
 
+#if BUILDING_GCC_VERSION < 7000
+#define SET_DECL_ALIGN(VAR, TYPE) DECL_ALIGN(VAR) = TYPE
+#endif
 
 static tree build_info_fn(func_t &, multiverse_context *);
 static tree build_info_var(variable_t &, multiverse_context *);
@@ -40,7 +43,7 @@ static tree build_var(tree type, std::string prefix)
     TREE_STATIC(var) = 1;
     TREE_ADDRESSABLE(var) = 1;
     DECL_NONALIASED(var) = 1;
-    DECL_ALIGN(var) = TYPE_ALIGN(type);
+    SET_DECL_ALIGN(var, TYPE_ALIGN(type));
 
     return var;
 }
