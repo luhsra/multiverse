@@ -295,6 +295,10 @@ static void replace_and_constify(tree old_var, const int value)
 static void multiverse_function(func_t &fn_info,
                                 var_assign_vector_t assignments)
 {
+    // Don't generate a new function if there's no assignment
+    if (assignments.size() == 0)
+        return;
+
     tree fndecl = cfun->decl;
     tree clone;
     function * clone_func;
