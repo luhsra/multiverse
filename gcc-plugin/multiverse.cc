@@ -646,8 +646,8 @@ merge_if_possible(std::vector<var_assign_t> &a,
     bool compatible = false;
     unsigned lower, upper;
     for (unsigned i = 0; i < a.size() ; i++) {
-        assert(a[i].variable->var_decl
-               == b[i].variable->var_decl);
+        if (a[i].variable->var_decl == b[i].variable->var_decl)
+            continue;
         if (a[i].lower_limit == b[i].lower_limit
             && a[i].upper_limit == b[i].upper_limit)
             continue;
