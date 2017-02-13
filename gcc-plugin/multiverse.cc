@@ -308,7 +308,7 @@ static void multiverse_function(func_t &fn_info,
 
     for ( var_assign_t &assign : assignments) {
         // Append variable assignments to the clone's name
-        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl));
+        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl)) << "_";
         if (assign.label)
             ss << assign.label;
         else
