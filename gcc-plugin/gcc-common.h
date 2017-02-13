@@ -1,3 +1,10 @@
+/*
+ *  This header is ported from linux-next, with minor tweaks for the multiverse
+ *  plugin.
+ *
+ *  See git://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git
+ */
+
 #ifndef GCC_COMMON_H_INCLUDED
 #define GCC_COMMON_H_INCLUDED
 
