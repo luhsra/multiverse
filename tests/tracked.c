@@ -1,3 +1,19 @@
+/*
+ * This test case should exemplify and test the "tracked" semantics of
+ * multiverse variables.  Marking a multiverse variable var as tracked via
+ * '__attribute__((multiverse("tracked"))) TYPE var' adds the semantics that var
+ * can also be unbound while committing, such that referencing functions will
+ * not be specialized with var's current value.  The vector of possible values
+ * is thus extended by one (i.e., unbound).
+ *
+ * The binding state of a tracked variable can be altered via the
+ * multiverse_bind(void* var_location, int state) interface, where var_location
+ * points to the specific variable and state defines the current binding state:
+ *      -  1 if variable should be bound
+ *      -  0 if variable should be unbound
+ *      - -1 to query the binding state
+ */
+
 #include <stdio.h>
 #include <assert.h>
 #include "multiverse.h"
@@ -7,6 +23,7 @@ typedef enum {true, false} bool;
 
 __attribute__((multiverse)) bool conf_a;
 __attribute__((multiverse("tracked"))) bool conf_b;
+
 
 int __attribute__((multiverse)) func() {
     int ret = 0;
@@ -18,6 +35,7 @@ int __attribute__((multiverse)) func() {
     }
     return ret;
 }
+
 
 int main(int argc, char **argv)
 {
