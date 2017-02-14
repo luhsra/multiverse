@@ -308,15 +308,14 @@ static void multiverse_function(func_t &fn_info,
 
     for ( var_assign_t &assign : assignments) {
         // Append variable assignments to the clone's name
-        ss << "_" << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl)) << "_";
+        ss << "." << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl)) << "_";
         if (assign.label)
             ss << assign.label;
         else
             ss << assign.lower_limit;
     }
 
-    fname += ".multiverse.";
-    fname += ss.str().substr(1);
+    fname += ".multiverse" + ss.str();
 
     if (dump_file) {
         fprintf(dump_file, "generating function clone %s\n", fname.c_str());
