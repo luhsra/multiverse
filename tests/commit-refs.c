@@ -1,7 +1,7 @@
 /*
- * Use multiverse_commit_var(&variable) to commit that a multiverse variable is
- * stable.  This function returns the number of changed functions and -1 in case
- * of error.
+ * Use multiverse_commit_refs(&variable) to commit that a multiverse variable is
+ * stable.  This function only patches functions that reference var, and returns
+ * the number of changed functions and -1 in case of error.
  */
 
 #include <stdio.h>
