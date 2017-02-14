@@ -292,12 +292,12 @@ static void replace_and_constify(tree old_var, const int value)
  * Clone the current function and replace all variables in @assignment with the
  * associated values.
  */
-static void multiverse_function(func_t &fn_info,
-                                var_assign_vector_t assignments)
+static unsigned int multiverse_function(func_t &fn_info,
+                                        var_assign_vector_t assignments)
 {
     // Don't generate a new function if there's no assignment
     if (assignments.size() == 0)
-        return;
+        return 0;
 
     tree fndecl = cfun->decl;
     tree clone;
@@ -338,7 +338,7 @@ static void multiverse_function(func_t &fn_info,
     remove_attribute("multiverse", DECL_ATTRIBUTES(cfun->decl));
     pop_cfun();
 
-    return;
+    return 1;
 }
 
 
@@ -609,11 +609,17 @@ static unsigned int mv_variant_generation_execute()
     func_t &fn_data = mv_ctx.functions.back();
     fn_data.fn_decl = cfun->decl;
 
+    unsigned int num_clones = 0;
     generator.start();
     while (!generator.end_p()) {
         var_assign_vector_t assignment;
         assignment = generator.next();
-        multiverse_function(fn_data, assignment);
+        num_clones += multiverse_function(fn_data, assignment);
+    }
+
+    if (dump_file) {
+        fprintf(dump_file, "Generated %d specialized functions for %s\n",
+                num_clones, fname.c_str());
     }
 
     return 0;
