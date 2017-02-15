@@ -1,7 +1,9 @@
 /*
- * A very simple testcase with
+ * A very simple test case with
  *  - one boolean variable 'config'
  *  - one function 'foo' that returns 'config'
+ *
+ * The test also checks some multiverse run-time data.
  */
 
 #include <stdio.h>
@@ -51,8 +53,8 @@ int main(int argc, char **argv)
 
     assert(foo() == 0 && config == 1);
 
-    // Call multiverse_commit() to commit config's new value
-    multiverse_commit();
+    // Commit config's new value
+    multiverse_commit_refs(&config);
 
     assert(foo() == 1 && config == 1);
 
