@@ -575,8 +575,8 @@ static unsigned int mv_variant_generation_execute()
             }
         } else {
             // Ok no explicit values. Start guessing.
-            // For enumeration types: we add all enumeration values
             if (TREE_CODE(TREE_TYPE(variable)) == ENUMERAL_TYPE) {
+                // For enumeration types: we add all enumeration values
                 tree element;
                 for (element = TYPE_VALUES (TREE_TYPE (variable));
                      element != NULL_TREE;
@@ -587,10 +587,9 @@ static unsigned int mv_variant_generation_execute()
                         generator.add_variable_value(var_info, label, val);
                     }
                 }
-            }
-            // For integer types, we add the hints, we extracted from this function body, or
-            // [0,1] as a default
-            if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
+            } else if (TREE_CODE(TREE_TYPE(variable)) == INTEGER_TYPE) {
+                // For integer types, we add the hints, we extracted from this
+                // function body, or [0,1] as a default
                 if (!hints.empty()) {
                     for (auto val : hints) {
                         generator.add_variable_value(var_info, NULL, val);
@@ -599,6 +598,9 @@ static unsigned int mv_variant_generation_execute()
                     generator.add_variable_value(var_info, NULL, 0);
                     generator.add_variable_value(var_info, NULL, 1);
                 }
+            } else if(TREE_CODE(TREE_TYPE(variable)) == BOOLEAN_TYPE) {
+                    generator.add_variable_value(var_info, NULL, 0);
+                    generator.add_variable_value(var_info, NULL, 1);
             }
         }
     }
