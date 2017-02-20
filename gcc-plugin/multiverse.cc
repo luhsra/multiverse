@@ -64,7 +64,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 {
     int type = TREE_CODE(TREE_TYPE(*node));
     // FIXME: Error on weak attributed variables?
-    if (type == INTEGER_TYPE || type == ENUMERAL_TYPE) {
+    if (type == INTEGER_TYPE || type == ENUMERAL_TYPE || type == BOOLEAN_TYPE) {
         tree var_decl = *node;
         variable_t &var_info
             = mv_ctx.add_variable(var_decl);
@@ -128,7 +128,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                                      DECL_ATTRIBUTES(*node)));
         DECL_UNINLINABLE(*node) = 1;
     } else {
-        error("variable %qD with %qE attribute must be an integer "
+        error("variable %qD with %qE attribute must be an integer, boolean "
               "or enumeral type", *node, name);
     }
 
