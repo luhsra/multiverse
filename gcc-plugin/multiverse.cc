@@ -648,13 +648,16 @@ merge_if_possible(std::vector<var_assign_t> &a,
                   std::vector<var_assign_t> &b)
 {
     if (a.size() != b.size()) return false;
+    // FIXME: Some sort of variable sorting here to normalize the assignment maps
 
     unsigned differences = 0, idx = 0;
     bool compatible = false;
     unsigned lower, upper;
     for (unsigned i = 0; i < a.size() ; i++) {
-        if (a[i].variable->var_decl == b[i].variable->var_decl)
-            continue;
+        // If two assignments have not exactly the same variable
+        // order, we cannot compare them.
+        if (a[i].variable->var_decl != b[i].variable->var_decl)
+            return false;
         if (a[i].lower_limit == b[i].lower_limit
             && a[i].upper_limit == b[i].upper_limit)
             continue;
@@ -667,6 +670,8 @@ merge_if_possible(std::vector<var_assign_t> &a,
             compatible = true;
         }
     }
+    // We are only allowed to touch the a assignment, iff we are sure
+    // merging worked.
     if (differences == 1 && compatible) {
         a[idx].lower_limit = lower;
         a[idx].upper_limit = upper;
@@ -688,8 +693,9 @@ static
 int merge_mvfn_selectors(func_t &fn_info,
                          equivalence_class &ec)
 {
-    debug_printf("\nmerge mvfn descriptors for: %s\n",
-                 IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
+    debug_printf("\nmerge mvfn descriptors for: %s starting with %d\n",
+                 IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)),
+                 ec.size());
 
     bool changed = true;
     while (changed) {
