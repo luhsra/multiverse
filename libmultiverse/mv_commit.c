@@ -1,13 +1,12 @@
-#include <stdio.h>
-#include "multiverse.h"
-#include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/mman.h>
-
+#include <assert.h>
+#include <string.h>
+#include "multiverse.h"
 #include "mv_commit.h"
 #include "arch.h"
+#include "platform.h"
+
 
 extern struct mv_info *mv_information;
 
@@ -19,37 +18,25 @@ static mv_value_t multiverse_var_read(struct mv_info_var *var) {
     } else if (var->variable_width == sizeof(unsigned int)) {
         return *(unsigned int *)var->variable_location;
     }
-    fprintf(stderr, "%x\n", var->info);
     assert (0 && "Invalid width of multiverse variable. This should not happen");
 }
 
 typedef struct {
     unsigned int cache_size;
-    void *cache[10];
-} mv_select_ctx_t;
+    void        *unprotected[10];
+;
+} mv_transaction_ctx_t;
 
-static mv_select_ctx_t *multiverse_select_start() {
-    mv_select_ctx_t *ret = calloc(1, sizeof(mv_select_ctx_t));
+static mv_transaction_ctx_t *mv_transaction_start() {
+    mv_transaction_ctx_t *ret = calloc(1, sizeof(mv_transaction_ctx_t));
     ret->cache_size = 10;
     return ret;
 }
 
-
-static void multiverse_select_protect(mv_select_ctx_t *ctx, void *addr) {
-    (void) ctx;
-    uintptr_t pagesize = sysconf(_SC_PAGESIZE);
-    void *page = (void*)((uintptr_t) addr & ~(pagesize - 1));
-    if (mprotect(page, pagesize, PROT_READ | PROT_EXEC)) {
-        assert(0 && "mprotect should not fail");
-    }
-    // Flush instruction and data cache
-    printf("protect %p\n", page);
-}
-
-static void multiverse_select_end(mv_select_ctx_t *ctx) {
+static void mv_transaction_end(mv_transaction_ctx_t *ctx) {
     for (unsigned i = 0; i < ctx->cache_size; i++) {
-        if (ctx->cache[i] != NULL) {
-            multiverse_select_protect(ctx, ctx->cache[i]);
+        if (ctx->unprotected[i] != NULL) {
+            multiverse_os_protect(ctx->unprotected[i]);
         }
     }
     free(ctx);
@@ -57,46 +44,40 @@ static void multiverse_select_end(mv_select_ctx_t *ctx) {
 
 
 
-static void multiverse_select_unprotect(mv_select_ctx_t *ctx, void *addr) {
-    uintptr_t pagesize = sysconf(_SC_PAGESIZE);
-    void *page = (void*)((uintptr_t) addr & ~(pagesize - 1));
+static void multiverse_transaction_unprotect(mv_transaction_ctx_t *ctx, void *addr) {
+    void *page = multiverse_os_addr_to_page(addr);
     // The unprotected_pages implements a LRU cache, where element 0 is
     // the hottest one.
     for (unsigned i = 0; i < ctx->cache_size; i++) {
-        if (ctx->cache[i] == page) {
-            // Shift everthing one position up
+        if (ctx->unprotected[i] == page) {
+            // If we have a cache hit, we sort the current element to
+            // the front. Therefore we push all elements before the
+            // hitting one, one element back.
             for (unsigned j = i; j > 0; j--) {
-                ctx->cache[j] = ctx->cache[j-1];
+                ctx->unprotected[j] = ctx->unprotected[j-1];
             }
-            // printf("already unprotected %p\n", page);
-            ctx->cache[0] = page;
+            ctx->unprotected[0] = page;
             return;
         }
     }
-    // Not yet unprotected
-    if (mprotect(page, pagesize, PROT_READ | PROT_WRITE | PROT_EXEC)) {
-        perror("mprotect");
-        printf("%p, %p\n", addr, page);
-        assert(0 && "mprotect should not fail");
+
+    multiverse_os_unprotect(page);
+
+    // Insert into the cache.
+    if (ctx->unprotected[ctx->cache_size - 1] != NULL) {
+        // If the cache is full, we push out the coldest element from the cache
+        multiverse_os_protect(ctx->unprotected[ctx->cache_size - 1]);
     }
-    // Insert into the cache: shift everything one back.
-    if (ctx->cache[ctx->cache_size - 1]) {
-        multiverse_select_protect(ctx, ctx->cache[ctx->cache_size - 1]);
-    }
-    for (unsigned j = ctx->cache_size - 2; j > 0; j--) {
-        ctx->cache[j] = ctx->cache[j-1];
-    }
-    ctx->cache[0] = page;
-    printf("unprotected ");
-    for (unsigned i = 0; i < ctx->cache_size && ctx->cache[i]; i++) {
-        printf(" %p", ctx->cache[i]);
-    }
-    printf("\n");
+    // Push everything one elment back.
+    memmove(&(ctx->unprotected[1]), &(ctx->unprotected[0]),
+            ctx->cache_size - 1);
+    ctx->unprotected[0] = page;
+
 }
 
 
 static int
-multiverse_select_mvfn(mv_select_ctx_t *ctx,
+multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
                        struct mv_info_fn *fn,
                        struct mv_info_mvfn *mvfn) {
     if (mvfn == fn->extra->active_mvfn) return 0;
@@ -107,8 +88,13 @@ multiverse_select_mvfn(mv_select_ctx_t *ctx,
         if (pp->type == PP_TYPE_INVALID) continue;
         if (!location) continue;
 
-        multiverse_select_unprotect(ctx, location);
-        multiverse_select_unprotect(ctx, location+5);
+        void *from, *to;
+        multiverse_arch_patchpoint_size(pp, &from, &to);
+
+        multiverse_transaction_unprotect(ctx, from);
+        if (from != to) {
+            multiverse_transaction_unprotect(ctx, to);
+        }
 
         if (mvfn == NULL) {
             multiverse_arch_patchpoint_revert(pp);
@@ -122,7 +108,7 @@ multiverse_select_mvfn(mv_select_ctx_t *ctx,
     return 1; // We changed this function
 }
 
-int __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
+static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
     struct mv_info_mvfn *best_mvfn = NULL;
 
     for (unsigned f = 0; f < fn->n_mv_functions; f++) {
@@ -150,10 +136,10 @@ int __multiverse_commit_fn(mv_select_ctx_t *ctx, struct mv_info_fn *fn) {
 }
 
 int multiverse_commit_info_fn(struct mv_info_fn *fn) {
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
     int ret = __multiverse_commit_fn(ctx, fn);
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
 
     return ret;
 }
@@ -168,7 +154,7 @@ int multiverse_commit_fn(void *function_body) {
 
 int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
     for (unsigned f = 0; f < var->extra->n_functions; ++f) {
         int r = __multiverse_commit_fn(ctx, var->extra->functions[f]);
@@ -179,7 +165,7 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
         ret += r;
     }
 
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
 
     return ret;
 }
@@ -192,7 +178,7 @@ int multiverse_commit_refs(void *variable_location) {
 
 int multiverse_commit() {
     int ret = 0;
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
     for (struct mv_info *info = mv_information; info; info = info->next) {
         for (unsigned i = 0; i < info->n_functions; ++i) {
@@ -205,18 +191,18 @@ int multiverse_commit() {
         }
     }
 
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
 
     return ret;
 }
 
 int multiverse_revert_info_fn(struct mv_info_fn *fn) {
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
 
     int ret = multiverse_select_mvfn(ctx,  fn, NULL);
 
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
     return ret;
 }
 
@@ -230,7 +216,7 @@ int multiverse_revert_fn(void *function_body) {
 
 int multiverse_revert_info_refs(struct mv_info_var *var) {
     int ret = 0;
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
     for (unsigned f = 0; f < var->extra->n_functions; ++f) {
         int r = multiverse_select_mvfn(ctx, var->extra->functions[f], NULL);
@@ -241,7 +227,7 @@ int multiverse_revert_info_refs(struct mv_info_var *var) {
         ret += r;
     }
 
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
 
     return ret;
 }
@@ -255,7 +241,7 @@ int multiverse_revert_refs(void *variable_location) {
 
 int multiverse_revert() {
     int ret = 0;
-    mv_select_ctx_t *ctx = multiverse_select_start();
+    mv_transaction_ctx_t *ctx = mv_transaction_start();
     if (!ctx) return -1;
 
     for (struct mv_info *info = mv_information; info; info = info->next) {
@@ -269,7 +255,7 @@ int multiverse_revert() {
         }
     }
 
-    multiverse_select_end(ctx);
+    mv_transaction_end(ctx);
 
     return ret;
 }

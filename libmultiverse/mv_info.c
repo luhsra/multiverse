@@ -78,9 +78,9 @@ int multiverse_init() {
 
             // First we install a patchpoint for the beginning of our function body
             struct mv_patchpoint pp;
-            pp.type = PP_TYPE_X86_JUMPQ;
-            pp.function = fn;
-            pp.location = fn->function_body;
+            multiverse_arch_decode_function(fn, &pp);
+            if (pp.type == PP_TYPE_INVALID) continue;
+
             mv_info_fn_patchpoint_append(fn, pp);
 
             for (unsigned j = 0; j < fn->n_mv_functions; j++) {
@@ -131,7 +131,7 @@ int multiverse_init() {
             /* Function was not found. Perhaps there are no multiverses? */
             if (fn == NULL) continue;
 
-            // Try to find an x86 callq (e8 <offset>)
+            // Try to find a patchpoint at the callsite offset
             struct mv_patchpoint pp;
             multiverse_arch_decode_callsite(fn, cs->call_label, &pp);
             if (pp.type != PP_TYPE_INVALID) {

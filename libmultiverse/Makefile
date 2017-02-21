@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS = -gdwarf-2 -Wall -Wextra
+CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99
 SOURCES=$(shell echo *.c)
 
 ALLPRODUCTS+=libmultiverse.a

@@ -1,9 +1,16 @@
-#include "arch.h"
-#include "multiverse.h"
 #include "memory.h"
 #include <stdint.h>
 #include <memory.h>
+#include "multiverse.h"
+#include "arch.h"
+#include "platform.h"
 
+void multiverse_arch_decode_function(struct mv_info_fn *fn,
+                                     struct mv_patchpoint *pp) {
+    pp->type     = PP_TYPE_X86_JUMPQ;
+    pp->function = fn;
+    pp->location = fn->function_body;
+}
 
 void multiverse_arch_decode_callsite(struct mv_info_fn *fn,
                                      void * addr,
@@ -66,36 +73,37 @@ void multiverse_arch_patchpoint_apply(struct mv_info_fn *fn,
     if (pp->type == PP_TYPE_X86_CALLQ) {
         // Oh, look. It has a very simple body!
         if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_NOP) {
-            printf("patch %p: NOP\n", location);
+            // printf("patch %p: NOP\n", location);
             // 5 byte NOP instruction
             memcpy(location, "\x0F\x1F\x44\x00\x00", 5);
         } else if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_CONSTANT) {
-            printf("patch %p: const = %d\n",
-                   location,
-                   mvfn->extra->constant);
+            // printf("patch %p: const = %d\n", location, mvfn->extra->constant);
             location[0] = 0xb8; // mov $..., eax
             *(uint32_t *)(location + 1) = mvfn->extra->constant;
         } else {
-            printf("patch %p: call %p\n", location, mvfn->function_body);
+            // printf("patch %p: call %p\n", location, mvfn->function_body);
             location[0] = 0xe8;
             insert_offset_argument(location, mvfn->function_body);
         }
     } else if (pp->type == PP_TYPE_X86_JUMPQ) {
-        printf("patch %p: jump %p\n", location, mvfn->function_body);
+        // printf("patch %p: jump %p\n", location, mvfn->function_body);
         location[0] = 0xe9;
         insert_offset_argument(location, mvfn->function_body);
     }
 
     // In all cases: Clear the cache afterwards.
-    __clear_cache(location, location+5);
-
+    multiverse_os_clear_cache(location, 5);
 }
 
 void multiverse_arch_patchpoint_revert(struct mv_patchpoint *pp) {
     unsigned char *location = pp->location;
     // Revert to original state
     memcpy(pp->location, &pp->swapspace[0], 5);
-    printf("patch %p: original\n", pp->location);
-    __clear_cache(location, location+5);
+    // printf("patch %p: original\n", pp->location);
+    multiverse_os_clear_cache(location, 5);
+}
 
+void multiverse_arch_patchpoint_size(struct mv_patchpoint *pp, void **from, void**to) {
+    *from = pp->location;
+    *to = pp->location + 5;
 }
