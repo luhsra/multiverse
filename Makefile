@@ -1,15 +1,15 @@
 all: gcc-plugin libmultiverse tests
 
 gcc-plugin libmultiverse tests:
-	make -C $@
+	$(MAKE) -C $@
 
 clean:
-	make -C gcc-plugin clean
-	make -C libmultiverse clean
-	make -C tests clean
+	$(MAKE) -C gcc-plugin clean
+	$(MAKE) -C libmultiverse clean
+	$(MAKE) -C tests clean
 
 test:
-	make -C tests test
+	$(MAKE) -C tests test
 
 
 .PHONY: gcc-plugin libmultiverse tests
