@@ -693,7 +693,7 @@ static
 int merge_mvfn_selectors(func_t &fn_info,
                          equivalence_class &ec)
 {
-    debug_printf("\nmerge mvfn descriptors for: %s starting with %d\n",
+    debug_printf("\nmerge mvfn descriptors for: %s starting with %lu\n",
                  IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)),
                  ec.size());
 
