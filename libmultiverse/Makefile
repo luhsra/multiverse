@@ -1,6 +1,6 @@
 MY_CC ?= gcc
 CC = $(MY_CC)
-CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99
+CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99 -fPIC
 SOURCES=$(shell echo *.c)
 
 ALLPRODUCTS+=libmultiverse.a
