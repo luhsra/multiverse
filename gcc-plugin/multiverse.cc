@@ -763,7 +763,7 @@ static unsigned int mv_variant_elimination_execute()
         hash_map <symtab_node *, sem_item *> ignored_nodes;
         for (auto &mvfn_info : fn_info.mv_functions) {
             cgraph_node *node = get_fn_cnode(mvfn_info.mvfn_decl);
-#if BUILDING_GCC_MAJOR >= 6 && BUILDING_GCC_MINOR >= 3
+#if BUILDING_GCC_MAJOR > 6 || (BUILDING_GCC_MAJOR == 6 && BUILDING_GCC_MINOR >= 3 )
             sem_function *func = new sem_function(node, &bmstack);
 #else
             sem_function *func = new sem_function(node, 0, &bmstack);
