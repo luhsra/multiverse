@@ -7,7 +7,7 @@ LIBRARY_DIR=../libmultiverse
 LIBRARY=$(LIBRARY_DIR)/libmultiverse.a
 EXTRA_DEPS=$(LIBRARY) $(PLUGIN)
 
-CFLAGS  = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -O2 -Wextra
+CFLAGS  = -fplugin=$(PLUGIN) -I$(LIBRARY_DIR) -Wextra
 LDFLAGS = -L$(LIBRARY_DIR)
 LDLIBS  = -lmultiverse
 
