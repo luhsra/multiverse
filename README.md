@@ -135,7 +135,7 @@ In this case, only two specialized version of `foo()` would be generated, one wi
 If multiverse function bodies are equivalent after the optimization passes, the plugin does only emit one function body and uses it for multiple multiverses.
 
 ### The Run-Time Library
-TODO: let's wait until the API stable
+See documentation in /doc.
 
 
 ## Building and Using Multiverse
