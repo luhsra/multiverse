@@ -48,20 +48,12 @@ void multiverse_arch_patchpoint_apply(struct mv_info_fn *fn,
         memcpy(&pp->swapspace[0], location, 4);
     }
 
-    // patch the code segment according to the patchpoint definition
-    if (pp->type == PP_TYPE_ARM_BL) {
-        // printf("patch %p: call %p\n", location, mvfn->function_body);
-        // printf("  before: %p\n", *((uint32_t*)location));
-        location[3] = 0b11101011; // TODO not always always-condition
-        insert_offset_argument(location, mvfn->function_body);
-        // printf("  after:  %p\n", *((uint32_t*)location));
-    } else if (pp->type == PP_TYPE_ARM_B) {
-        // printf("patch %p: jump %p\n", location, mvfn->function_body);
-        // printf("  before: %p\n", *((uint32_t*)location));
-        location[3] = 0b11101010; // TODO not always always-condition
-        insert_offset_argument(location, mvfn->function_body);
-        // printf("  after:  %p\n", *((uint32_t*)location));
-    }
+    // Patch the code segment according to the patchpoint definition
+    // The first 4 bits specify the condition and must be preserved
+    location[3] |= 0b00001111;
+    // the second 4 bits must be 1011 (BL) or 1010 (B)
+    location[3] &= (PP_TYPE_ARM_BL) ? 0b11111011 : 0b11111010;
+    insert_offset_argument(location, mvfn->function_body);
 
     // In all cases: Clear the cache afterwards.
     multiverse_os_clear_cache(location, 4);
