@@ -13,8 +13,9 @@
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
-#include <stdio.h>
+/* #include <stdio.h> */
 #include <stdint.h>
+/* #include <linux/types.h> */
 
 struct mv_info_var;
 struct mv_info_mvfn;
@@ -128,8 +129,8 @@ struct mv_info {
     struct mv_info_callsite * callsites;
 };
 
-int multiverse_init();
-void multiverse_dump_info(FILE*);
+int multiverse_init(void);
+/* void multiverse_dump_info(FILE*); */
 
 
 struct mv_info_fn  *  multiverse_info_fn(void * function_body);
@@ -148,7 +149,7 @@ struct mv_info_var *  multiverse_info_var(void * variable_location);
 
   @return number of changed functions or -1 on error
 */
-int multiverse_commit();
+int multiverse_commit(void);
 
 /**
   @brief commit a single multiverse function
@@ -287,7 +288,7 @@ int multiverse_revert_refs(void * var_location);
 
    @return number of changes functions or -1 on error
 */
-int multiverse_revert();
+int multiverse_revert(void);
 
 /**
    @brief Test whether a function is currently committed to a mulitverse variant.

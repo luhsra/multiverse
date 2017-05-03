@@ -1,7 +1,5 @@
-#include <stdint.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
+#include "std_include.h"
+/* #include <assert.h> */
 #include "multiverse.h"
 #include "mv_commit.h"
 #include "arch.h"
@@ -18,7 +16,7 @@ static mv_value_t multiverse_var_read(struct mv_info_var *var) {
     } else if (var->variable_width == sizeof(unsigned int)) {
         return *(unsigned int *)var->variable_location;
     }
-    assert (0 && "Invalid width of multiverse variable. This should not happen");
+    //assert (0 && "Invalid width of multiverse variable. This should not happen");
 }
 
 typedef struct {

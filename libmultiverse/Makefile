@@ -1,6 +1,6 @@
 MY_CC ?= gcc
 CC = $(MY_CC)
-CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99 -fPIC
+CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99 -fno-common -mcmodel=kernel
 SOURCES=$(shell echo *.c)
 
 ALLPRODUCTS+=libmultiverse.a

@@ -1,6 +1,4 @@
-#include "memory.h"
-#include <stdint.h>
-#include <memory.h>
+#include "std_include.h"
 #include "multiverse.h"
 #include "arch.h"
 #include "platform.h"
