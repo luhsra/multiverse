@@ -6,20 +6,32 @@
 #include <stdint.h>
 #include <stddef.h>
 
-extern int memcmp(const void*, const void*, size_t);
+int memcmp(const void*, const void*, size_t);
 
-extern void* memcpy(void *, const void *, size_t);
+void* memcpy(void *, const void *, size_t);
 
-extern void* memmove(void *, const void *, size_t);
+void* memmove(void *, const void *, size_t);
 
 
-extern void* malloc(size_t size);
+void* malloc(size_t size);
 
-extern void* calloc(size_t num, size_t size);
+void* calloc(size_t num, size_t size);
 
-extern void free(void* ptr);
+void free(void* ptr);
 
-extern void* realloc(void* ptr, size_t size);
+void* realloc(void* ptr, size_t size);
+
+unsigned long kallsyms_lookup_name(const char *name);
+
+// #include <stdarg.h>
+// int vprintk(const char *fmt, va_list args);
+//
+// static void print(const char* fmt, ...) {
+//   va_list args;
+//   va_start(args, fmt);
+//   vprintk(fmt, args);
+//   va_end(args);
+// }
 
 #else
 

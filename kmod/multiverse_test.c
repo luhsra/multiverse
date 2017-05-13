@@ -2,6 +2,8 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 
+MODULE_LICENSE("GPL");
+
 void multiverse_fn(void);
 
 static int multiverse_test_init_module(void) {
