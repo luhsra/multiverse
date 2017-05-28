@@ -1,5 +1,6 @@
-#include "std_include.h"
 /* #include <assert.h> */
+#include "mv_types.h"
+#include "mv_string.h"
 #include "multiverse.h"
 #include "mv_commit.h"
 #include "arch.h"
@@ -17,6 +18,7 @@ static mv_value_t multiverse_var_read(struct mv_info_var *var) {
         return *(unsigned int *)var->variable_location;
     }
     //assert (0 && "Invalid width of multiverse variable. This should not happen");
+    return 0;
 }
 
 typedef struct {
@@ -25,19 +27,21 @@ typedef struct {
 ;
 } mv_transaction_ctx_t;
 
-static mv_transaction_ctx_t *mv_transaction_start() {
-    mv_transaction_ctx_t *ret = calloc(1, sizeof(mv_transaction_ctx_t));
+static mv_transaction_ctx_t *mv_transaction_start(void) {
+    mv_transaction_ctx_t *ret =
+        multiverse_os_calloc(1, sizeof(mv_transaction_ctx_t));
     ret->cache_size = 10;
     return ret;
 }
 
 static void mv_transaction_end(mv_transaction_ctx_t *ctx) {
-    for (unsigned i = 0; i < ctx->cache_size; i++) {
+    unsigned i = 0;
+    for (i = 0; i < ctx->cache_size; i++) {
         if (ctx->unprotected[i] != NULL) {
             multiverse_os_protect(ctx->unprotected[i]);
         }
     }
-    free(ctx);
+    multiverse_os_free(ctx);
 }
 
 
@@ -46,12 +50,14 @@ static void multiverse_transaction_unprotect(mv_transaction_ctx_t *ctx, void *ad
     void *page = multiverse_os_addr_to_page(addr);
     // The unprotected_pages implements a LRU cache, where element 0 is
     // the hottest one.
-    for (unsigned i = 0; i < ctx->cache_size; i++) {
+    unsigned i;
+    for (i = 0; i < ctx->cache_size; i++) {
         if (ctx->unprotected[i] == page) {
             // If we have a cache hit, we sort the current element to
             // the front. Therefore we push all elements before the
             // hitting one, one element back.
-            for (unsigned j = i; j > 0; j--) {
+            unsigned j;
+            for (j = i; j > 0; j--) {
                 ctx->unprotected[j] = ctx->unprotected[j-1];
             }
             ctx->unprotected[0] = page;
@@ -78,15 +84,18 @@ static int
 multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
                        struct mv_info_fn *fn,
                        struct mv_info_mvfn *mvfn) {
+    unsigned i;
+
     if (mvfn == fn->extra->active_mvfn) return 0;
 
-    for (unsigned i = 0; i < fn->extra->n_patchpoints; i++) {
+    for (i = 0; i < fn->extra->n_patchpoints; i++) {
+        void *from, *to;
         struct mv_patchpoint *pp = &fn->extra->patchpoints[i];
         unsigned char *location = pp->location;
+
         if (pp->type == PP_TYPE_INVALID) continue;
         if (!location) continue;
 
-        void *from, *to;
         multiverse_arch_patchpoint_size(pp, &from, &to);
 
         multiverse_transaction_unprotect(ctx, from);
@@ -108,11 +117,12 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
 
 static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
     struct mv_info_mvfn *best_mvfn = NULL;
-
-    for (unsigned f = 0; f < fn->n_mv_functions; f++) {
+    unsigned f;
+    for (f = 0; f < fn->n_mv_functions; f++) {
         struct mv_info_mvfn * mvfn = &fn->mv_functions[f];
         unsigned good = 1;
-        for (unsigned a = 0; a < mvfn->n_assignments; a++) {
+        unsigned a;
+        for (a = 0; a < mvfn->n_assignments; a++) {
             struct mv_info_assignment * assign = &mvfn->assignments[a];
             // If the assignment of this mvfn depends on an unbound
             // variable. The mvfn is unsuitable currently.
@@ -135,8 +145,9 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
 
 int multiverse_commit_info_fn(struct mv_info_fn *fn) {
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    int ret;
     if (!ctx) return -1;
-    int ret = __multiverse_commit_fn(ctx, fn);
+    ret = __multiverse_commit_fn(ctx, fn);
     mv_transaction_end(ctx);
 
     return ret;
@@ -153,8 +164,9 @@ int multiverse_commit_fn(void *function_body) {
 int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    unsigned f;
     if (!ctx) return -1;
-    for (unsigned f = 0; f < var->extra->n_functions; ++f) {
+    for (f = 0; f < var->extra->n_functions; ++f) {
         int r = __multiverse_commit_fn(ctx, var->extra->functions[f]);
         if (r < 0) {
             ret = -1;
@@ -177,9 +189,11 @@ int multiverse_commit_refs(void *variable_location) {
 int multiverse_commit() {
     int ret = 0;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    struct mv_info *info;
     if (!ctx) return -1;
-    for (struct mv_info *info = mv_information; info; info = info->next) {
-        for (unsigned i = 0; i < info->n_functions; ++i) {
+    for (info = mv_information; info; info = info->next) {
+        unsigned i;
+        for (i = 0; i < info->n_functions; ++i) {
             int r = __multiverse_commit_fn(ctx, &info->functions[i]);
             if (r < 0) {
                 ret = -1;
@@ -196,9 +210,11 @@ int multiverse_commit() {
 
 int multiverse_revert_info_fn(struct mv_info_fn *fn) {
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    int ret;
+
     if (!ctx) return -1;
 
-    int ret = multiverse_select_mvfn(ctx,  fn, NULL);
+    ret = multiverse_select_mvfn(ctx,  fn, NULL);
 
     mv_transaction_end(ctx);
     return ret;
@@ -215,8 +231,11 @@ int multiverse_revert_fn(void *function_body) {
 int multiverse_revert_info_refs(struct mv_info_var *var) {
     int ret = 0;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    unsigned f;
+
     if (!ctx) return -1;
-    for (unsigned f = 0; f < var->extra->n_functions; ++f) {
+
+    for (f = 0; f < var->extra->n_functions; ++f) {
         int r = multiverse_select_mvfn(ctx, var->extra->functions[f], NULL);
         if (r < 0) {
             ret = -1;
@@ -239,11 +258,14 @@ int multiverse_revert_refs(void *variable_location) {
 
 int multiverse_revert() {
     int ret = 0;
+    struct mv_info *info;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+
     if (!ctx) return -1;
 
-    for (struct mv_info *info = mv_information; info; info = info->next) {
-        for (unsigned i = 0; i < info->n_functions; ++i) {
+    for (info = mv_information; info; info = info->next) {
+        unsigned i;
+        for (i = 0; i < info->n_functions; ++i) {
             int r = multiverse_select_mvfn(ctx,  &info->functions[i], NULL);
             if (r < 0) {
                 r = -1;

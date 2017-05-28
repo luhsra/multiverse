@@ -13,9 +13,7 @@
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
-/* #include <stdio.h> */
-#include <stdint.h>
-/* #include <linux/types.h> */
+#include "mv_types.h"
 
 struct mv_info_var;
 struct mv_info_mvfn;

@@ -7,8 +7,6 @@
 #ifndef __MULTIVERSE_PLATFORM_H
 #define __MULTIVERSE_PLATFORM_H
 
-#include "mv_commit.h"
-
 /**
  @brief Translate a pointer to a page pointer of the desired OS configuration
 */
@@ -28,5 +26,21 @@ void multiverse_os_unprotect(void * page);
  @brief Clear all instruction cache lines that cover [addr, addr+length]
 */
 void multiverse_os_clear_cache(void* addr, unsigned int length);
+
+
+void* multiverse_os_malloc(size_t size);
+
+
+void* multiverse_os_calloc(size_t num, size_t size);
+
+
+void multiverse_os_free(void* ptr);
+
+
+void* multiverse_os_realloc(void* ptr, size_t size);
+
+
+void multiverse_os_print(const char* fmt, ...);
+
 
 #endif

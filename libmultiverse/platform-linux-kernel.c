@@ -1,6 +1,8 @@
-#include <stdint.h>
 /* #include <assert.h> */
-#include "std_include.h"
+#include <stdarg.h>
+#include <linux/module.h>
+#include <linux/kallsyms.h>
+#include <linux/slab.h>
 #include "platform.h"
 
 
@@ -33,6 +35,35 @@ void multiverse_os_unprotect(void * page) {
     set_memory_rw((unsigned long)page, 1);
 }
 
+
 void multiverse_os_clear_cache(void* addr, unsigned int length) {
     __builtin___clear_cache(addr, addr+length);
+}
+
+
+void* multiverse_os_malloc(size_t size) {
+    return kmalloc(size, GFP_KERNEL);
+}
+
+
+void* multiverse_os_calloc(size_t num, size_t size) {
+    return kcalloc(num, size, GFP_KERNEL);
+}
+
+
+void multiverse_os_free(void* ptr) {
+    kfree(ptr);
+}
+
+
+void* multiverse_os_realloc(void* ptr, size_t size) {
+    return krealloc(ptr, size, GFP_KERNEL);
+}
+
+
+void multiverse_os_print(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vprintk(fmt, args);
+    va_end(args);
 }

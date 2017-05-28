@@ -1,12 +1,18 @@
-MY_CC ?= gcc
-CC = $(MY_CC)
-CFLAGS = -gdwarf-2 -Wall -Wextra -O2 -std=c99 -fno-common -mcmodel=kernel
-SOURCES=$(shell echo *.c)
+PLATFORM ?= linux-kernel
+ARCH ?= $(shell uname -m)
 
-ALLPRODUCTS+=libmultiverse.a
-all: libmultiverse.a
+ALL_ARCHS = x86 x86_64
+ALL_PLATFORMS = linux-user linux-kernel
 
-include ../common.mk
+# x86 and x86_64 currently have the same implementation
+ifeq ($(ARCH),x86_64)
+  ARCH = x86
+endif
 
-libmultiverse.a: $(OBJECTS)
-	ar rcs $@ $^
+SOURCES := mv_commit.c mv_info.c arch-$(ARCH).c platform-$(PLATFORM).c
+
+ifeq ($(PLATFORM),linux-kernel)
+  include $(PWD)/kernel.mk
+else
+  include user.mk
+endif
