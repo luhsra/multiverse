@@ -20,7 +20,7 @@ int main(int argc, char **argv)
 {
     multiverse_init();
 
-    multiverse_dump_info(stderr);
+    multiverse_dump_info();
 
     a = 4; multiverse_commit_fn(&func);
     assert(multiverse_is_committed(&func));

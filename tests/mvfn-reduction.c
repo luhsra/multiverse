@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 {
     multiverse_init();
 
-    multiverse_dump_info(stderr);
+    multiverse_dump_info();
 
     // For two() we need two function bodies (one is returning 0, the
     // other is printing stuff and then returning 1). Nevertheless, we

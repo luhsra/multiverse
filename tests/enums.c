@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 {
     multiverse_init();
 
-    multiverse_dump_info(stderr);
+    multiverse_dump_info();
 
     // Functional Test
     for (conf_a = 0; conf_a <= 1; conf_a ++) {
