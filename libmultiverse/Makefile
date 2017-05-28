@@ -1,4 +1,4 @@
-PLATFORM ?= linux-kernel
+PLATFORM ?= linux-user
 ARCH ?= $(shell uname -m)
 
 ALL_ARCHS = x86 x86_64

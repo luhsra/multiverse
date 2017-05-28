@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 {
     multiverse_init();
 
-    multiverse_dump_info(stderr);
+    multiverse_dump_info();
 
     lvalue_func();
 

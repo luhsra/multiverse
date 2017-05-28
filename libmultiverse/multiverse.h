@@ -128,7 +128,7 @@ struct mv_info {
 };
 
 int multiverse_init(void);
-/* void multiverse_dump_info(FILE*); */
+void multiverse_dump_info(void);
 
 
 struct mv_info_fn  *  multiverse_info_fn(void * function_body);
