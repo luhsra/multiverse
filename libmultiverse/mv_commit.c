@@ -1,4 +1,4 @@
-/* #include <assert.h> */
+#include "mv_assert.h"
 #include "mv_types.h"
 #include "mv_string.h"
 #include "multiverse.h"
@@ -17,7 +17,7 @@ static mv_value_t multiverse_var_read(struct mv_info_var *var) {
     } else if (var->variable_width == sizeof(unsigned int)) {
         return *(unsigned int *)var->variable_location;
     }
-    //assert (0 && "Invalid width of multiverse variable. This should not happen");
+    MV_ASSERT(0 && "Invalid width of multiverse variable. This should not happen");
     return 0;
 }
 

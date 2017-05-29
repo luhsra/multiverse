@@ -1,4 +1,4 @@
-/* #include <assert.h> */
+#include "mv_assert.h"
 #include "mv_types.h"
 #include "platform.h"
 #include "multiverse.h"
@@ -101,7 +101,7 @@ int multiverse_init() {
                 multiverse_arch_decode_mvfn_body(mvfn->function_body, &extra);
                 if (extra.type != MVFN_TYPE_NONE) {
                     mvfn->extra = multiverse_os_malloc(sizeof(extra));
-                    /* assert(mvfn->extra != NULL); */
+                    MV_ASSERT(mvfn->extra != NULL);
                     *mvfn->extra = extra;
                 }
                 for (x = 0; x < mvfn->n_assignments; x++) {
@@ -112,10 +112,10 @@ int multiverse_init() {
                     struct mv_info_assignment *assign = &mvfn->assignments[x];
                     struct mv_info_var * var = multiverse_info_var(assign->variable);
 
-                    /* assert(var != NULL); */
+                    MV_ASSERT(var != NULL);
                     assign->variable = var;
 
-                    /* assert(assign->lower_bound <= assign->upper_bound); */
+                    MV_ASSERT(assign->lower_bound <= assign->upper_bound);
 
                     // Add function to list of associated functions of
                     // variable, if not yet present

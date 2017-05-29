@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
+#include "mv_assert.h"
 #include "platform.h"
 
 
@@ -16,11 +17,13 @@ void *multiverse_os_addr_to_page(void *addr) {
 */
 void multiverse_os_protect(void * page) {
     static int (*set_memory_ro)(unsigned long addr, int numpages) = (void*)0;
+    int ret;
     if (set_memory_ro == (void*)0) {
         set_memory_ro = (void*)kallsyms_lookup_name("set_memory_ro");
+        MV_ASSERT(set_memory_ro != (void*)0);
     }
-    // TODO this may fail
-    set_memory_ro((unsigned long)page, 1);
+    ret = set_memory_ro((unsigned long)page, 1);
+    MV_ASSERT(ret == 0);
 }
 
 /**
@@ -28,11 +31,13 @@ void multiverse_os_protect(void * page) {
 */
 void multiverse_os_unprotect(void * page) {
     static int (*set_memory_rw)(unsigned long addr, int numpages) = (void*)0;
+    int ret;
     if (set_memory_rw == (void*)0) {
         set_memory_rw = (void*)kallsyms_lookup_name("set_memory_rw");
+        MV_ASSERT(set_memory_rw != (void*)0);
     }
-    // TODO this may fail
-    set_memory_rw((unsigned long)page, 1);
+    ret = set_memory_rw((unsigned long)page, 1);
+    MV_ASSERT(ret == 0);
 }
 
 
