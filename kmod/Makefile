@@ -1,21 +1,10 @@
-# ccflags-y = -fplugin=$(PWD)/../gcc-plugin/multiverse.so -L$(PWD)/../libmultiverse -I$(PWD)/../libmultiverse/ -lmultiverse
-# ldflags-y = -L$(PWD)/../libmultiverse -lmultiverse
-# ccflags-y = -fplugin=$(PWD)/../gcc-plugin/multiverse.so -I$(PWD)/../libmultiverse/
+LINUX_BUILD_DIR ?= /lib/modules/$(shell uname -r)/build
 
-LINUX_BUILD_DIR = /lib/modules/$(shell uname -r)/build
+obj-m := multiverse_test.o
+ccflags-y := -fplugin=$(PWD)/../gcc-plugin/multiverse.so
 
-obj-m := multiverse.o
-multiverse-objs := multiverse_test.o std.o libmultiverse_fn.a ../libmultiverse/libmultiverse.a
-
-all: multiverse_fn
+all:
 	make -C $(LINUX_BUILD_DIR) M=$(PWD) modules
 
 clean:
 	make -C $(LINUX_BUILD_DIR) M=$(PWD) clean
-
-multiverse_fn:
-	gcc -fno-common -mcmodel=kernel -fplugin=../gcc-plugin/multiverse.so -L../libmultiverse -I../libmultiverse/ -lmultiverse -o multiverse_fn.o -c multiverse_fn.c
-	ar rcs libmultiverse_fn.a multiverse_fn.o
-
-
-.PHONY: multiverse_fn
