@@ -26,7 +26,7 @@
 #include "gcc-common.h"
 #include "multiverse.h"
 
-#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION > 7000
+#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION > 7110
 #error "Currently, the plugin supports only GCC 6 and GCC 7."
 #endif
 
