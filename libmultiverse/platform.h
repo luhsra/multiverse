@@ -7,6 +7,8 @@
 #ifndef __MULTIVERSE_PLATFORM_H
 #define __MULTIVERSE_PLATFORM_H
 
+#include "mv_types.h"
+
 /**
  @brief Translate a pointer to a page pointer of the desired OS configuration
 */

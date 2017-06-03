@@ -1,5 +1,4 @@
 #include "mv_assert.h"
-#include "mv_types.h"
 #include "platform.h"
 #include "multiverse.h"
 #include "mv_commit.h"
@@ -137,8 +136,6 @@ int multiverse_init() {
                 }
 
             }
-
-
         }
 
         for (i = 0; i < info->n_callsites; ++i) {

@@ -3,8 +3,26 @@
 #include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
+#include "multiverse.h"
 #include "mv_assert.h"
 #include "platform.h"
+
+void __multiverse_init(struct mv_info *info);
+EXPORT_SYMBOL(__multiverse_init);
+EXPORT_SYMBOL(multiverse_init);
+EXPORT_SYMBOL(multiverse_dump_info);
+EXPORT_SYMBOL(multiverse_commit_info_fn);
+EXPORT_SYMBOL(multiverse_commit_fn);
+EXPORT_SYMBOL(multiverse_commit_info_refs);
+EXPORT_SYMBOL(multiverse_commit_refs);
+EXPORT_SYMBOL(multiverse_commit);
+EXPORT_SYMBOL(multiverse_revert_info_fn);
+EXPORT_SYMBOL(multiverse_revert_fn);
+EXPORT_SYMBOL(multiverse_revert_info_refs);
+EXPORT_SYMBOL(multiverse_revert_refs);
+EXPORT_SYMBOL(multiverse_revert);
+EXPORT_SYMBOL(multiverse_is_committed);
+EXPORT_SYMBOL(multiverse_bind);
 
 
 void *multiverse_os_addr_to_page(void *addr) {

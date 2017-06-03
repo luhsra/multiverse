@@ -1,5 +1,4 @@
 #include "mv_assert.h"
-#include "mv_types.h"
 #include "mv_string.h"
 #include "multiverse.h"
 #include "mv_commit.h"

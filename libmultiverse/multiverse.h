@@ -13,8 +13,6 @@
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
-#include "mv_types.h"
-
 struct mv_info_var;
 struct mv_info_mvfn;
 struct mv_info_fn;
@@ -93,7 +91,7 @@ struct mv_info_var {
     void *        variable_location;
 
     union {
-        uint32_t info;
+        unsigned int info;
         struct {
             unsigned int
                 variable_width  : 4,
