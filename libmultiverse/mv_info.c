@@ -88,7 +88,11 @@ int multiverse_init() {
             multiverse_arch_decode_function(fn, &pp);
             if (pp.type == PP_TYPE_INVALID) continue;
 
-            mv_info_fn_patchpoint_append(fn, pp);
+            if (fn->n_mv_functions > 0) {
+                // Only append "self" patchpoint if fn describes a function and
+                // not a function pointer
+                mv_info_fn_patchpoint_append(fn, pp);
+            }
 
             for (j = 0; j < fn->n_mv_functions; j++) {
                 unsigned x;

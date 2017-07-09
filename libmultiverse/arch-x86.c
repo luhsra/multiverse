@@ -5,7 +5,7 @@
 
 void multiverse_arch_decode_function(struct mv_info_fn *fn,
                                      struct mv_patchpoint *pp) {
-    pp->type     = PP_TYPE_X86_JUMPQ;
+    pp->type     = PP_TYPE_X86_JUMP;
     pp->function = fn;
     pp->location = fn->function_body;
 }
@@ -14,13 +14,24 @@ void multiverse_arch_decode_callsite(struct mv_info_fn *fn,
                                      void * addr,
                                      struct mv_patchpoint *info) {
     unsigned char *p = addr;
-    void * callee = p + *(int*)(p + 1) + 5;
-    /* 0xe8 */
-    if (p[0] == 0xe8 && callee == fn->function_body) {
-        info->type = PP_TYPE_X86_CALLQ;
-        info->function = fn;
-        info->location = p;
-        return;
+    if (p[0] == 0xe8) {
+        // normal call
+        void * callee = p + *(int*)(p + 1) + 5;
+        if (callee == fn->function_body) {
+            info->type = PP_TYPE_X86_CALL;
+            info->function = fn;
+            info->location = p;
+            return;
+        }
+    } else if (p[0] == 0xff && p[1] == 0x15) {
+        // indirect call (function pointer)
+        void * callee_p = p + *(int*)(p + 2) + 6;
+        if (callee_p == fn->function_body) {
+            info->type = PP_TYPE_X86_CALL_INDIRECT;
+            info->function = fn;
+            info->location = p;
+            return;
+        }
     }
     info->type = PP_TYPE_INVALID;
 }
@@ -30,6 +41,14 @@ static int is_ret(char *addr) {
     // f3 c3: repz retq
     return (memcmp(addr, "\xc3", 1) == 0)
         || (memcmp(addr, "\xf3\xc3", 2) == 0);
+}
+
+static int location_len(mv_info_patchpoint_type type) {
+    if (type == PP_TYPE_X86_CALL_INDIRECT) {
+        return 6;
+    } else {
+        return 5;
+    }
 }
 
 void multiverse_arch_decode_mvfn_body(void * addr,
@@ -64,49 +83,51 @@ void multiverse_arch_patchpoint_apply(struct mv_info_fn *fn,
     unsigned char *location = pp->location;
     // Select from original -> Swap out the current code
     if (fn->extra->active_mvfn == NULL) {
-        memcpy(&pp->swapspace[0], location, 5);
+        memcpy(&pp->swapspace[0], location, location_len(pp->type));
     }
 
     // patch the code segment according to the patchpoint definition
-    if (pp->type == PP_TYPE_X86_CALLQ) {
+    if (pp->type == PP_TYPE_X86_CALL || pp->type == PP_TYPE_X86_CALL_INDIRECT) {
         // Oh, look. It has a very simple body!
         if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_NOP) {
-            // multiverse_os_print("patch %p: NOP\n", location);
-            // 5 byte NOP instruction
-            memcpy(location, "\x0F\x1F\x44\x00\x00", 5);
+            if (pp->type == PP_TYPE_X86_CALL_INDIRECT) {
+                // 6 byte NOP instruction
+                memcpy(location, "\x66\x0F\x1F\x44\x00\x00", 6);
+            } else {
+                // 5 byte NOP instruction
+                memcpy(location, "\x0F\x1F\x44\x00\x00", 5);
+            }
         } else if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_CONSTANT) {
-            // multiverse_os_print("patch %p: const = %d\n", location,
-            //                     mvfn->extra->constant);
             location[0] = 0xb8; // mov $..., eax
             *(uint32_t *)(location + 1) = mvfn->extra->constant;
+            if (pp->type == PP_TYPE_X86_CALL_INDIRECT)
+                location[5] = '\x90'; // insert trailing NOP
         } else {
-            // multiverse_os_print("patch %p: call %p\n", location,
-            //                     mvfn->function_body);
             location[0] = 0xe8;
             insert_offset_argument(location, mvfn->function_body);
+            if (pp->type == PP_TYPE_X86_CALL_INDIRECT)
+                location[5] = '\x90'; // insert trailing NOP
         }
-    } else if (pp->type == PP_TYPE_X86_JUMPQ) {
-        // multiverse_os_print("patch %p: jump %p\n",
-        //                     location, mvfn->function_body);
+    } else if (pp->type == PP_TYPE_X86_JUMP) {
         location[0] = 0xe9;
         insert_offset_argument(location, mvfn->function_body);
     }
 
     // In all cases: Clear the cache afterwards.
-    multiverse_os_clear_cache(location, 5);
+    multiverse_os_clear_cache(location, location_len(pp->type));
 }
 
 void multiverse_arch_patchpoint_revert(struct mv_patchpoint *pp) {
     unsigned char *location = pp->location;
+    int size = location_len(pp->type);
     // Revert to original state
-    memcpy(pp->location, &pp->swapspace[0], 5);
-    // multiverse_os_print("patch %p: original\n", pp->location);
-    multiverse_os_clear_cache(location, 5);
+    memcpy(pp->location, &pp->swapspace[0], size);
+    multiverse_os_clear_cache(location, size);
 }
 
 void multiverse_arch_patchpoint_size(struct mv_patchpoint *pp,
                                      void **from,
                                      void**to) {
     *from = pp->location;
-    *to = pp->location + 5;
+    *to = pp->location + location_len(pp->type);
 }

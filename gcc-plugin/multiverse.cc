@@ -132,9 +132,17 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                            tree_cons(get_identifier("noinline"), NULL,
                                                      DECL_ATTRIBUTES(*node)));
         DECL_UNINLINABLE(*node) = 1;
+    } else if (type == POINTER_TYPE
+               && (TREE_CODE(TREE_TYPE(TREE_TYPE(*node))) == FUNCTION_TYPE)) {
+        // This is the third possibility how the multiverse attribute can be used.
+        // We ensured that the pointer is a function pointer.
+        // We do nothing else here.
+        mv_ctx.functions.push_back(func_t());
+        func_t &fn_data = mv_ctx.functions.back();
+        fn_data.fn_decl = *node;
     } else {
         error("variable %qD with %qE attribute must be an integer, boolean "
-              "or enumeral type", *node, name);
+              "or enumeral type or a function pointer", *node, name);
     }
 
     return NULL_TREE;
@@ -209,6 +217,24 @@ static bool is_multiverse_fn(tree &fn)
         return false;
 
     tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(fn));
+    if(attr == NULL_TREE)
+        return false;
+    return true;
+}
+
+
+/*
+ * Return true if function pointer is multiverse attributed.
+ */
+static bool is_multiverse_fp(tree &fp)
+{
+    auto var_type = TREE_TYPE(fp);
+    if (TREE_CODE(var_type) != POINTER_TYPE)
+        return false;
+    if (TREE_CODE(TREE_TYPE(var_type)) != FUNCTION_TYPE)
+        return false;
+
+    tree attr = lookup_attribute("multiverse", DECL_ATTRIBUTES(fp));
     if(attr == NULL_TREE)
         return false;
     return true;
@@ -853,7 +879,16 @@ static unsigned int mv_callsites_execute()
             if (CALL_P(insn) && (call = get_call_rtx_from(insn))) {
                 tree decl = SYMBOL_REF_DECL(XEXP(XEXP(call,0), 0));
                 if (!decl) continue;
-                if (!is_multiverse_fn(decl)) continue;
+
+                if (TREE_TYPE(decl)) {
+                    // Could be a normal call to a multiverse function
+                    if (!is_multiverse_fn(decl)) continue;
+                } else {
+                    // Could be an indirect call to a function pointed to by
+                    // a multiversed function pointer
+                    decl = SYMBOL_REF_DECL(XEXP(XEXP(XEXP(call,0), 0), 0));
+                    if (!is_multiverse_fp(decl)) continue;
+                }
 
                 // We have to insert a label before the code
                 tree tree_label = create_artificial_label(UNKNOWN_LOCATION);

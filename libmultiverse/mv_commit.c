@@ -115,31 +115,57 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
 }
 
 static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
-    struct mv_info_mvfn *best_mvfn = NULL;
-    unsigned f;
-    for (f = 0; f < fn->n_mv_functions; f++) {
-        struct mv_info_mvfn * mvfn = &fn->mv_functions[f];
-        unsigned good = 1;
-        unsigned a;
-        for (a = 0; a < mvfn->n_assignments; a++) {
-            struct mv_info_assignment * assign = &mvfn->assignments[a];
-            // If the assignment of this mvfn depends on an unbound
-            // variable. The mvfn is unsuitable currently.
-            if (!assign->variable->extra->bound) {
-                good = 0;
-            } else {
-                // Variable is bound
-                mv_value_t cur = multiverse_var_read(assign->variable);
-                if (cur > assign->upper_bound || cur < assign->lower_bound)
+    int ret;
+    if (fn->n_mv_functions > 0) {
+        // A normal multiverse function
+        struct mv_info_mvfn *best_mvfn = NULL;
+        unsigned f;
+        for (f = 0; f < fn->n_mv_functions; f++) {
+            struct mv_info_mvfn * mvfn = &fn->mv_functions[f];
+            unsigned good = 1;
+            unsigned a;
+            for (a = 0; a < mvfn->n_assignments; a++) {
+                struct mv_info_assignment * assign = &mvfn->assignments[a];
+                // If the assignment of this mvfn depends on an unbound
+                // variable. The mvfn is unsuitable currently.
+                if (!assign->variable->extra->bound) {
                     good = 0;
+                } else {
+                    // Variable is bound
+                    mv_value_t cur = multiverse_var_read(assign->variable);
+                    if (cur > assign->upper_bound || cur < assign->lower_bound)
+                        good = 0;
+                }
+            }
+            if (good) {
+                // Here we possibly override an already valid mvfn
+                best_mvfn = mvfn;
             }
         }
-        if (good) {
-            // Here we possibly override an already valid mvfn
-            best_mvfn = mvfn;
+        ret = multiverse_select_mvfn(ctx, fn, best_mvfn);
+    } else {
+        // A multiversed function pointer
+        // Create "artificial" mvfn according to the function pointer
+        struct mv_info_mvfn* prev_mvfn = fn->extra->active_mvfn;
+        struct mv_info_mvfn* new_mvfn =
+            multiverse_os_malloc(sizeof(struct mv_info_mvfn));
+        struct mv_info_mvfn_extra* new_mvfn_extra =
+            multiverse_os_malloc(sizeof(struct mv_info_mvfn_extra));
+        *new_mvfn = (struct mv_info_mvfn) {
+            .function_body = *((void**)fn->function_body),
+            .n_assignments = 0,
+            .assignments = NULL,
+            .extra = new_mvfn_extra
+        };
+        multiverse_arch_decode_mvfn_body(new_mvfn->function_body, new_mvfn_extra);
+        ret = multiverse_select_mvfn(ctx, fn, new_mvfn);
+        // Destroy the previous "artificial" mvfn
+        if (prev_mvfn != NULL) {
+            multiverse_os_free(prev_mvfn->extra);
+            multiverse_os_free(prev_mvfn);
         }
     }
-    return multiverse_select_mvfn(ctx, fn, best_mvfn);
+    return ret;
 }
 
 int multiverse_commit_info_fn(struct mv_info_fn *fn) {
