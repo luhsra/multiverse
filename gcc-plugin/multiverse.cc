@@ -485,8 +485,8 @@ static unsigned int mv_variant_generation_execute()
     std::string fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
 
     if (!is_multiverse_fn(cfun->decl)) {
-        debug_printf("mv variant generation: skipping non-mv function '%s'\n",
-                     fname.c_str());
+        // debug_printf("mv variant generation: skipping non-mv function '%s'\n",
+                     // fname.c_str());
         return 0;
     }
 
@@ -886,6 +886,9 @@ static unsigned int mv_callsites_execute()
                 } else {
                     // Could be an indirect call to a function pointed to by
                     // a multiversed function pointer
+                    if (call && XEXP(call,0) && XEXP(XEXP(call,0), 0)
+                        && XEXP(XEXP(XEXP(call,0), 0), 0))
+                        continue;
                     decl = SYMBOL_REF_DECL(XEXP(XEXP(XEXP(call,0), 0), 0));
                     if (!is_multiverse_fp(decl)) continue;
                 }
