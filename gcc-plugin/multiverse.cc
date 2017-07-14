@@ -886,8 +886,9 @@ static unsigned int mv_callsites_execute()
                 } else {
                     // Could be an indirect call to a function pointed to by
                     // a multiversed function pointer
-                    if (call && XEXP(call,0) && XEXP(XEXP(call,0), 0)
-                        && XEXP(XEXP(XEXP(call,0), 0), 0))
+                    if (GET_CODE(XEXP(XEXP(call, 0), 0)) != MEM)
+                        continue;
+                    if (GET_CODE(XEXP(XEXP(XEXP(call, 0), 0), 0)) != SYMBOL_REF)
                         continue;
                     decl = SYMBOL_REF_DECL(XEXP(XEXP(XEXP(call,0), 0), 0));
                     if (!is_multiverse_fp(decl)) continue;
