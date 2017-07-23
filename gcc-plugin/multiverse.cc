@@ -137,9 +137,20 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         // This is the third possibility how the multiverse attribute can be used.
         // We ensured that the pointer is a function pointer.
         // We do nothing else here.
-        mv_ctx.functions.push_back(func_t());
-        func_t &fn_data = mv_ctx.functions.back();
-        fn_data.fn_decl = *node;
+        auto match = [&](func_t &f) {
+            // Don't add the function pointer more than one time.
+            // This happens when we include 'extern' declarations of multiversed
+            // function pointers.
+            auto nname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(*node));
+            auto fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(f.fn_decl));
+            return fname == nname;
+        };
+        auto &funcs = mv_ctx.functions;
+        if(std::find_if(funcs.begin(), funcs.end(), match) == funcs.end()) {
+            mv_ctx.functions.push_back(func_t());
+            func_t &fn_data = mv_ctx.functions.back();
+            fn_data.fn_decl = *node;
+        }
     } else {
         error("variable %qD with %qE attribute must be an integer, boolean "
               "or enumeral type or a function pointer", *node, name);
