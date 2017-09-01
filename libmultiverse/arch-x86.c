@@ -67,6 +67,10 @@ void multiverse_arch_decode_mvfn_body(void * addr,
     } else if (is_ret(addr)) {
         // multiverse_os_print("NOP\n");
         info->type = MVFN_TYPE_NOP;
+    } else if (memcmp(op, "\xfa", 1) == 0 && is_ret(op + 1)) {
+        info->type = MVFN_TYPE_CLI;
+    } else if (memcmp(op, "\xfb", 1) == 0 && is_ret(op + 1)) {
+        info->type = MVFN_TYPE_STI;
     } else {
         info->type = MVFN_TYPE_NONE;
     }
@@ -91,17 +95,27 @@ void multiverse_arch_patchpoint_apply(struct mv_info_fn *fn,
         // Oh, look. It has a very simple body!
         if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_NOP) {
             if (pp->type == PP_TYPE_X86_CALL_INDIRECT) {
-                // 6 byte NOP instruction
-                memcpy(location, "\x66\x0F\x1F\x44\x00\x00", 6);
+                memcpy(location, "\x66\x0F\x1F\x44\x00\x00", 6); // 6 byte NOP
             } else {
-                // 5 byte NOP instruction
-                memcpy(location, "\x0F\x1F\x44\x00\x00", 5);
+                memcpy(location, "\x0F\x1F\x44\x00\x00", 5);     // 5 byte NOP
             }
         } else if (mvfn->extra && mvfn->extra->type == MVFN_TYPE_CONSTANT) {
             location[0] = 0xb8; // mov $..., eax
             *(uint32_t *)(location + 1) = mvfn->extra->constant;
             if (pp->type == PP_TYPE_X86_CALL_INDIRECT)
                 location[5] = '\x90'; // insert trailing NOP
+        } else if (mvfn->extra && (mvfn->extra->type == MVFN_TYPE_CLI ||
+                                   mvfn->extra->type == MVFN_TYPE_STI)) {
+            if (mvfn->extra->type == MVFN_TYPE_CLI) {
+                location[0] = '\xfa'; // CLI
+            } else {
+                location[0] = '\xfb'; // STI
+            }
+            if (pp->type == PP_TYPE_X86_CALL_INDIRECT) {
+                memcpy(&location[1], "\x0F\x1F\x44\x00\x00", 5); // 5 byte NOP
+            } else {
+                memcpy(&location[1], "\x0F\x1F\x40\x00", 4);     // 4 byte NOP
+            }
         } else {
             location[0] = 0xe8;
             insert_offset_argument(location, mvfn->function_body);

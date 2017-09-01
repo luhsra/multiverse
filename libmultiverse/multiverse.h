@@ -32,6 +32,8 @@ typedef enum {
     MVFN_TYPE_NONE,
     MVFN_TYPE_NOP,
     MVFN_TYPE_CONSTANT,
+    MVFN_TYPE_CLI,
+    MVFN_TYPE_STI,
 } mvfn_type_t;
 
 struct mv_info_mvfn_extra {
