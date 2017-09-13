@@ -11,7 +11,7 @@ ALLPRODUCTS=multiverse.so
 
 all: multiverse.so
 
-include ../common.mk
+include common.mk
 
 multiverse.so: $(OBJECTS)
 	$(CXX) -shared $(CXXFLAGS) $^ -o $@
