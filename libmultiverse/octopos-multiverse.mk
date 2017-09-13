@@ -2,6 +2,7 @@ $(shell echo Multiverse support was loaded >&2)
 
 MULT_DIR=${SRC_DIR}/multiverse-gcc-plugin
 MULT_PLUGIN=${MULT_DIR}/multiverse.so
+MULT_PLUGIN_SRC=$(shell find ${MULT_PLUGIN_DIR} -name "*.cc"  2> /dev/null)
 
 MODULES_ALL += multiverse
 MODULES_CLEAN += multiverse
@@ -18,8 +19,8 @@ MULT_DEP := $(patsubst %.o,$(DEPDIR)/%.d,$(MULT_C_OBJ))
 DEP_FILES += ${MULT_DEP}
 
 # Multiverse GCC Plugin is build before anything else
-${OBJDIR}/puma.config: all_multiverse
-all_multiverse:
+${OBJDIR}/puma.config: ${MULT_PLUGIN}
+${MULT_PLUGIN}: ${MULT_PLUGIN_SRC}
 	@echo "Build Multiverse GCC Plugin: ${MULT_PLUGIN}"
 	@${MAKE} -C ${MULT_DIR}
 
