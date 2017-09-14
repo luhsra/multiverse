@@ -6,7 +6,6 @@
 aspect multiverse_Init {
 	advice execution("void os::krn::System::hal_init()") : after() {
 		multiverse_init();
-                multiverse_dump_info();
 	}
 };
 

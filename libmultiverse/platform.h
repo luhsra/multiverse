@@ -33,6 +33,10 @@ void multiverse_os_unprotect(void * page);
 */
 void multiverse_os_clear_cache(void* addr, unsigned int length);
 
+/**
+   @brief Clear all caches. This functionality is only required on some platforms.
+*/
+void multiverse_os_clear_caches();
 
 void* multiverse_os_malloc(size_t size);
 
