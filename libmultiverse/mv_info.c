@@ -54,8 +54,6 @@ int mv_info_fn_patchpoint_append(struct mv_info_fn *fn, struct mv_patchpoint pp)
 int multiverse_init() {
     struct mv_info *info;
 
-    multiverse_os_print("mv_init\n");
-
     /* Step 1: Set up all extra datastructures */
     for (info = mv_information; info; info = info->next) {
         unsigned i;
