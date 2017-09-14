@@ -130,6 +130,12 @@ static void build_info_type(tree info_type,
 }
 
 static tree build_info(multiverse_context *ctx) {
+    /* Nothing was multiverse in this translation unit */
+    if (ctx->variables.size() == 0
+        && ctx->functions.size() == 0
+        && ctx->callsites.size() == 0)
+        return 0;
+
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(ctx->info_type);
@@ -583,16 +589,22 @@ static void build_init_ctor(tree mv_info_ptr_type, tree mv_info_var)
 
 void mv_info_init(void *event_data, void *data)
 {
+    (void) event_data;
+    (void) gcc_version;
+
     build_types((multiverse_context *) data);
 }
 
 void mv_info_finish(void *event_data, void *data)
 {
+    (void) event_data;
     multiverse_context *ctx = (multiverse_context *) data;
-    tree info_var = build_var(ctx->info_type, "__mv_info_");
-
     // We get a constructor for the object
     tree info_obj = build_info(ctx);
+    if (!info_obj) return;
+
+    // Create a variable to bind it
+    tree info_var = build_var(ctx->info_type, "__mv_info_");
 
     /* And initialize a variable with it */
     DECL_INITIAL(info_var) = info_obj;

@@ -41,6 +41,7 @@ static void mv_transaction_end(mv_transaction_ctx_t *ctx) {
         }
     }
     multiverse_os_free(ctx);
+    multiverse_os_clear_caches();
 }
 
 

@@ -9,6 +9,10 @@
 
 #include "mv_types.h"
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /**
  @brief Translate a pointer to a page pointer of the desired OS configuration
 */
@@ -29,6 +33,10 @@ void multiverse_os_unprotect(void * page);
 */
 void multiverse_os_clear_cache(void* addr, unsigned int length);
 
+/**
+   @brief Clear all caches. This functionality is only required on some platforms.
+*/
+void multiverse_os_clear_caches();
 
 void* multiverse_os_malloc(size_t size);
 
@@ -44,5 +52,8 @@ void* multiverse_os_realloc(void* ptr, size_t size);
 
 void multiverse_os_print(const char* fmt, ...);
 
+#if defined(__cplusplus)
+} // extern "C"
+#endif
 
 #endif

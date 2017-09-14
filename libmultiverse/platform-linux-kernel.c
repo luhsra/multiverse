@@ -63,6 +63,7 @@ void multiverse_os_clear_cache(void* addr, unsigned int length) {
     __builtin___clear_cache(addr, addr+length);
 }
 
+void multiverse_os_clear_caches() { }
 
 void* multiverse_os_malloc(size_t size) {
     return kmalloc(size, GFP_KERNEL);
