@@ -9,6 +9,10 @@
 
 #include "mv_types.h"
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /**
  @brief Translate a pointer to a page pointer of the desired OS configuration
 */
@@ -44,5 +48,8 @@ void* multiverse_os_realloc(void* ptr, size_t size);
 
 void multiverse_os_print(const char* fmt, ...);
 
+#if defined(__cplusplus)
+} // extern "C"
+#endif
 
 #endif

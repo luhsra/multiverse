@@ -1,0 +1,13 @@
+#ifndef HW_HAL_E1000_INIT_AH
+#define HW_HAL_E1000_INIT_AH
+
+#include "multiverse/libmultiverse/multiverse.h"
+
+aspect multiverse_Init {
+	advice execution("void os::krn::System::hal_init()") : after() {
+		multiverse_init();
+                multiverse_dump_info();
+	}
+};
+
+#endif // HW_HAL_E1000_INIT_AH

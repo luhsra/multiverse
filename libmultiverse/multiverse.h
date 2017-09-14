@@ -13,6 +13,10 @@
 #ifndef __MULTIVERSE_H
 #define __MULTIVERSE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct mv_info_var;
 struct mv_info_mvfn;
 struct mv_info_fn;
@@ -324,4 +328,7 @@ int multiverse_is_committed(void* function_body);
 int multiverse_bind(void* var_location, int state);
 
 
+#ifdef __cplusplus
+} // extern "C"
+#endif
 #endif
