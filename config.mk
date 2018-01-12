@@ -1,4 +1,4 @@
-PLATFORM ?= linux-kernel
+PLATFORM ?= unix
 ARCH     ?= $(shell uname -m)
 
 # x86 and x86_64 currently have the same implementation
