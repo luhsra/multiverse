@@ -7,8 +7,6 @@
 #include "mv_assert.h"
 #include "platform.h"
 
-void __multiverse_init(struct mv_info *info);
-EXPORT_SYMBOL(__multiverse_init);
 EXPORT_SYMBOL(multiverse_init);
 EXPORT_SYMBOL(multiverse_dump_info);
 EXPORT_SYMBOL(multiverse_commit_info_fn);

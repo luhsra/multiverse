@@ -6,7 +6,10 @@
 #include "platform.h"
 
 
-extern struct mv_info *mv_information;
+/* TODO encapsulate all this stuff in mv_info */
+extern struct mv_info_fn __start___multiverse_fn_;
+extern struct mv_info_fn __stop___multiverse_fn_;
+
 
 static mv_value_t multiverse_var_read(struct mv_info_var *var) {
     if (var->variable_width == sizeof(unsigned char)) {
@@ -215,18 +218,17 @@ int multiverse_commit_refs(void *variable_location) {
 int multiverse_commit() {
     int ret = 0;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
-    struct mv_info *info;
+    struct mv_info_fn *fn;
+
     if (!ctx) return -1;
-    for (info = mv_information; info; info = info->next) {
-        unsigned i;
-        for (i = 0; i < info->n_functions; ++i) {
-            int r = __multiverse_commit_fn(ctx, &info->functions[i]);
-            if (r < 0) {
-                ret = -1;
-                break; // FIXME: get a valid state after this
-            }
-            ret += r;
+
+    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+        int r = __multiverse_commit_fn(ctx, fn);
+        if (r < 0) {
+            ret = -1;
+            break; // FIXME: get a valid state after this
         }
+        ret += r;
     }
 
     mv_transaction_end(ctx);
@@ -284,21 +286,18 @@ int multiverse_revert_refs(void *variable_location) {
 
 int multiverse_revert() {
     int ret = 0;
-    struct mv_info *info;
     mv_transaction_ctx_t *ctx = mv_transaction_start();
+    struct mv_info_fn *fn;
 
     if (!ctx) return -1;
 
-    for (info = mv_information; info; info = info->next) {
-        unsigned i;
-        for (i = 0; i < info->n_functions; ++i) {
-            int r = multiverse_select_mvfn(ctx,  &info->functions[i], NULL);
-            if (r < 0) {
-                r = -1;
-                break;
-            }
-            ret += r;
+    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+        int r = multiverse_select_mvfn(ctx, fn, NULL);
+        if (r < 0) {
+            r = -1;
+            break;
         }
+        ret += r;
     }
 
     mv_transaction_end(ctx);

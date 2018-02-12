@@ -20,7 +20,6 @@ extern "C" {
 struct mv_info_var;
 struct mv_info_mvfn;
 struct mv_info_fn;
-struct mv_info;
 struct mv_info_callsite;
 struct mv_patchpoint;
 
@@ -113,23 +112,6 @@ struct mv_info_var {
     };
 };
 
-
-struct mv_info {
-    /* This multiverse info record was generated for multiverse
-     * version N */
-    unsigned int version;
-
-    struct mv_info *next; // Filled by runtime system
-
-    unsigned int n_variables;
-    struct mv_info_var *variables;
-
-    unsigned int n_functions;
-    struct mv_info_fn * functions;
-
-    unsigned int n_callsites;
-    struct mv_info_callsite * callsites;
-};
 
 int multiverse_init(void);
 void multiverse_dump_info(void);

@@ -53,10 +53,11 @@ template<typename Seq, typename T>
 static tree build_array_from_list(Seq &elements,
                                   tree element_type,
                                   tree (*build_obj_ptr)(T&, multiverse_context*),
-                                  multiverse_context *ctx)
+                                  multiverse_context *ctx,
+                                  const char *custom_section = NULL)
 {
     tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_QUAL_CONST),
-                                     build_index_type(size_int(elements.size())));
+                                     build_index_type(size_int(elements.size()-1)));
 
     vec<constructor_elt, va_gc> *ary_ctor = NULL;
     for (auto &data : elements) {
@@ -64,8 +65,12 @@ static tree build_array_from_list(Seq &elements,
         CONSTRUCTOR_APPEND_ELT(ary_ctor, NULL, obj);
     }
 
-    tree ary = build_var(ary_type, "__mv_ary_");
+    tree ary = build_var(ary_type, "__multiverse_ary.");
     DECL_INITIAL(ary) = build_constructor(ary_type, ary_ctor);
+
+    if (custom_section)
+        set_decl_section_name(ary, custom_section);
+
     varpool_node::finalize_decl(ary);
 
     return ary;
@@ -79,120 +84,27 @@ static tree build_array_from_list(Seq &elements,
     fields = field;
 
 
-static void build_info_type(tree info_type,
-                            tree info_var_ptr_type,
-                            tree info_fn_ptr_type,
-                            tree info_callsite_ptr_type)
-{
-    /*  struct __mv_info {
-          unsigned int version;
-
-          struct mv_info *next;
-
-          unsigned int n_variables;
-          struct mv_info_var *variables;
-
-          unsigned int n_functions;
-          struct mv_info_fn * functions;
-
-          unsigned int n_callsites;
-          struct mv_info_callsite * callsites;
-        };
-    */
-
-    tree field, fields = NULL_TREE;
-
-    /* Version ident */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* next pointer */
-    RECORD_FIELD(build_pointer_type(build_qualified_type (info_type, TYPE_QUAL_CONST)));
-
-    /* n_vars */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* struct mv_info_var pointer pointer */
-    RECORD_FIELD(build_qualified_type(info_var_ptr_type, TYPE_QUAL_CONST));
-
-    /* n_functions */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* struct mv_info_fn pointer pointer */
-    RECORD_FIELD(build_qualified_type(info_fn_ptr_type, TYPE_QUAL_CONST));
-
-    /* n_callsites */
-    RECORD_FIELD(get_mv_unsigned_t());
-
-    /* struct mv_info_fn pointer pointer */
-    RECORD_FIELD(build_qualified_type(info_callsite_ptr_type, TYPE_QUAL_CONST));
-
-    finish_builtin_struct(info_type, "__mv_info", fields, NULL_TREE);
-}
-
-static tree build_info(multiverse_context *ctx) {
+static void build_info(multiverse_context *ctx) {
     /* Nothing was multiverse in this translation unit */
     if (ctx->variables.size() == 0
         && ctx->functions.size() == 0
         && ctx->callsites.size() == 0)
-        return 0;
-
-    /* Create the constructor for the top-level mv_info object */
-    vec<constructor_elt, va_gc> *obj = NULL;
-    tree info_fields = TYPE_FIELDS(ctx->info_type);
+        return;
 
     /* Version ident */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields), MV_VERSION));
-    info_fields = DECL_CHAIN(info_fields);
+    // TODO: MV_VERSION ???
 
-    /* next -- NULL; Filled by Runtime System */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* n_variables */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields),
-                                          ctx->variables.size()));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* variables -- NULL */
-    tree var_ary = build_array_from_list(ctx->variables, ctx->var_type,
-                                         build_info_var, ctx);
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, ctx->var_ptr_type, var_ary));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* n_functions */
-    unsigned n_functions = ctx->functions.size();
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields),
-                                          n_functions));
-    info_fields = DECL_CHAIN(info_fields);
+    /* variables */
+    build_array_from_list(ctx->variables, ctx->var_type,
+                          build_info_var, ctx, "__multiverse_var_");
 
     /* functions */
-    tree fn_ary = build_array_from_list(ctx->functions, ctx->fn_type,
-                                        build_info_fn, ctx);
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                          build1(ADDR_EXPR, ctx->fn_ptr_type, fn_ary));
-    info_fields = DECL_CHAIN(info_fields);
+    build_array_from_list(ctx->functions, ctx->fn_type,
+                          build_info_fn, ctx, "__multiverse_fn_");
 
-    /* n_functions */
-    unsigned n_callsites = ctx->callsites.size();
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields),
-                                          n_callsites));
-    info_fields = DECL_CHAIN(info_fields);
-
-    /* callsites -- NULL */
-    tree callsite_ary = build_array_from_list(ctx->callsites, ctx->callsite_type,
-                                        build_info_callsite, ctx);
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, ctx->callsite_ptr_type, callsite_ary));
-    info_fields = DECL_CHAIN(info_fields);
-
-    gcc_assert(!info_fields); // All fields are filled
-
-    return build_constructor(ctx->info_type, obj);
+    /* callsites */
+    build_array_from_list(ctx->callsites, ctx->callsite_type,
+                          build_info_callsite, ctx, "__multiverse_callsite_");
 }
 
 
@@ -552,38 +464,11 @@ static void build_types(multiverse_context *t)
     t->callsite_ptr_type = build_pointer_type(t->callsite_type);
 
 
-    build_info_type(t->info_type, t->var_ptr_type, t->fn_ptr_type, t->callsite_ptr_type);
     build_info_fn_type(t->fn_type, t->mvfn_ptr_type);
     build_info_variable_type(t->var_type);
     build_info_mvfn_type(t->mvfn_type, t->assignment_ptr_type);
     build_info_assignment_type(t->assignment_type, t->var_ptr_type);
     build_info_callsite_type(t->callsite_type);
-}
-
-
-/*
- * Generate the constructor function to call __multiverse_init.
- */
-static void build_init_ctor(tree mv_info_ptr_type, tree mv_info_var)
-{
-    tree ctor, stmt, init_fn;
-
-    /* Build a decl for __multiverse_init.  */
-    init_fn = build_function_type_list(void_type_node, mv_info_ptr_type, NULL);
-    init_fn = build_decl(BUILTINS_LOCATION, FUNCTION_DECL,
-                         get_identifier("__multiverse_init"), init_fn);
-    TREE_PUBLIC(init_fn) = 1;
-    DECL_EXTERNAL(init_fn) = 1;
-    DECL_ASSEMBLER_NAME(init_fn);
-
-    /* Generate a call to __multiverse_init(&mv_info).  */
-    ctor = NULL;
-    stmt = build_fold_addr_expr(mv_info_var);
-    stmt = build_call_expr(init_fn, 1, stmt);
-    append_to_statement_list(stmt, &ctor);
-
-    /* Generate a constructor to run it.  */
-    cgraph_build_static_cdtor('I', ctor, DEFAULT_INIT_PRIORITY);
 }
 
 
@@ -599,18 +484,5 @@ void mv_info_finish(void *event_data, void *data)
 {
     (void) event_data;
     multiverse_context *ctx = (multiverse_context *) data;
-    // We get a constructor for the object
-    tree info_obj = build_info(ctx);
-    if (!info_obj) return;
-
-    // Create a variable to bind it
-    tree info_var = build_var(ctx->info_type, "__mv_info_");
-
-    /* And initialize a variable with it */
-    DECL_INITIAL(info_var) = info_obj;
-
-    varpool_node::finalize_decl(info_var);
-
-    // Call __multiverse_init() on program startup
-    build_init_ctor(ctx->info_ptr_type, info_var);
+    build_info(ctx);
 }
