@@ -29,11 +29,8 @@ typedef struct {
 ;
 } mv_transaction_ctx_t;
 
-static mv_transaction_ctx_t *mv_transaction_start(void) {
-    mv_transaction_ctx_t *ret =
-        multiverse_os_calloc(1, sizeof(mv_transaction_ctx_t));
-    ret->cache_size = 10;
-    return ret;
+static mv_transaction_ctx_t mv_transaction_start(void) {
+    return (mv_transaction_ctx_t){ .cache_size = 10 };
 }
 
 static void mv_transaction_end(mv_transaction_ctx_t *ctx) {
@@ -43,7 +40,6 @@ static void mv_transaction_end(mv_transaction_ctx_t *ctx) {
             multiverse_os_protect(ctx->unprotected[i]);
         }
     }
-    multiverse_os_free(ctx);
     multiverse_os_clear_caches();
 }
 
@@ -173,11 +169,9 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
 }
 
 int multiverse_commit_info_fn(struct mv_info_fn *fn) {
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
-    int ret;
-    if (!ctx) return -1;
-    ret = __multiverse_commit_fn(ctx, fn);
-    mv_transaction_end(ctx);
+    mv_transaction_ctx_t ctx = mv_transaction_start();
+    int ret = __multiverse_commit_fn(&ctx, fn);
+    mv_transaction_end(&ctx);
 
     return ret;
 }
@@ -192,11 +186,10 @@ int multiverse_commit_fn(void *function_body) {
 
 int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
+    mv_transaction_ctx_t ctx = mv_transaction_start();
     unsigned f;
-    if (!ctx) return -1;
     for (f = 0; f < var->extra->n_functions; ++f) {
-        int r = __multiverse_commit_fn(ctx, var->extra->functions[f]);
+        int r = __multiverse_commit_fn(&ctx, var->extra->functions[f]);
         if (r < 0) {
             ret = -1;
             break;
@@ -204,7 +197,7 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
         ret += r;
     }
 
-    mv_transaction_end(ctx);
+    mv_transaction_end(&ctx);
 
     return ret;
 }
@@ -212,18 +205,17 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
 int multiverse_commit_refs(void *variable_location) {
     struct mv_info_var *var = multiverse_info_var(variable_location);
     if (!var) return -1;
+
     return multiverse_commit_info_refs(var);
 }
 
 int multiverse_commit() {
     int ret = 0;
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
+    mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
-    if (!ctx) return -1;
-
     for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
-        int r = __multiverse_commit_fn(ctx, fn);
+        int r = __multiverse_commit_fn(&ctx, fn);
         if (r < 0) {
             ret = -1;
             break; // FIXME: get a valid state after this
@@ -231,20 +223,18 @@ int multiverse_commit() {
         ret += r;
     }
 
-    mv_transaction_end(ctx);
+    mv_transaction_end(&ctx);
 
     return ret;
 }
 
 int multiverse_revert_info_fn(struct mv_info_fn *fn) {
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
+    mv_transaction_ctx_t ctx = mv_transaction_start();
     int ret;
 
-    if (!ctx) return -1;
+    ret = multiverse_select_mvfn(&ctx,  fn, NULL);
 
-    ret = multiverse_select_mvfn(ctx,  fn, NULL);
-
-    mv_transaction_end(ctx);
+    mv_transaction_end(&ctx);
     return ret;
 }
 
@@ -258,13 +248,11 @@ int multiverse_revert_fn(void *function_body) {
 
 int multiverse_revert_info_refs(struct mv_info_var *var) {
     int ret = 0;
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
+    mv_transaction_ctx_t ctx = mv_transaction_start();
     unsigned f;
 
-    if (!ctx) return -1;
-
     for (f = 0; f < var->extra->n_functions; ++f) {
-        int r = multiverse_select_mvfn(ctx, var->extra->functions[f], NULL);
+        int r = multiverse_select_mvfn(&ctx, var->extra->functions[f], NULL);
         if (r < 0) {
             ret = -1;
             break;
@@ -272,7 +260,7 @@ int multiverse_revert_info_refs(struct mv_info_var *var) {
         ret += r;
     }
 
-    mv_transaction_end(ctx);
+    mv_transaction_end(&ctx);
 
     return ret;
 }
@@ -286,13 +274,11 @@ int multiverse_revert_refs(void *variable_location) {
 
 int multiverse_revert() {
     int ret = 0;
-    mv_transaction_ctx_t *ctx = mv_transaction_start();
+    mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
-    if (!ctx) return -1;
-
     for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
-        int r = multiverse_select_mvfn(ctx, fn, NULL);
+        int r = multiverse_select_mvfn(&ctx, fn, NULL);
         if (r < 0) {
             r = -1;
             break;
@@ -300,7 +286,7 @@ int multiverse_revert() {
         ret += r;
     }
 
-    mv_transaction_end(ctx);
+    mv_transaction_end(&ctx);
 
     return ret;
 }
