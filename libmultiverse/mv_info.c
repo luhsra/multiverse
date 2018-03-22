@@ -5,14 +5,14 @@
 #include "arch.h"
 
 
-extern struct mv_info_var __start___multiverse_var_;
-extern struct mv_info_var __stop___multiverse_var_;
+extern struct mv_info_var __attribute__((weak)) __start___multiverse_var_;
+extern struct mv_info_var __attribute__((weak)) __stop___multiverse_var_;
 
-extern struct mv_info_fn __start___multiverse_fn_;
-extern struct mv_info_fn __stop___multiverse_fn_;
+extern struct mv_info_fn __attribute__((weak)) __start___multiverse_fn_;
+extern struct mv_info_fn __attribute__((weak)) __stop___multiverse_fn_;
 
-extern struct mv_info_callsite __start___multiverse_callsite_;
-extern struct mv_info_callsite __stop___multiverse_callsite_;
+extern struct mv_info_callsite __attribute__((weak)) __start___multiverse_callsite_;
+extern struct mv_info_callsite __attribute__((weak)) __stop___multiverse_callsite_;
 
 
 struct mv_info_var *

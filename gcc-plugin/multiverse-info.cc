@@ -30,11 +30,6 @@ static tree get_mv_unsigned_t(void)
 }
 
 
-static const char *get_source_filename(void) {
-    return expand_location(input_location).file;
-}
-
-
 template<typename Seq, typename T>
 static tree get_array_decl(const char *name,
                            Seq &elements,
@@ -71,9 +66,6 @@ static tree build_array(Seq &elements,
                         tree (*build_obj)(T&, multiverse_context*),
                         multiverse_context *ctx)
 {
-    if (elements.size() == 0)
-        return NULL;
-
     auto name = std::string("__multiverse_ary_") + std::to_string(name_counter++);
     tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, ctx);
 
@@ -83,23 +75,27 @@ static tree build_array(Seq &elements,
 
 
 template<typename Seq, typename T>
-static tree build_section_array(const char *section_name,
+static void build_section_array(const char *section_name,
                                 Seq &elements,
                                 tree element_type,
                                 tree (*build_obj)(T&, multiverse_context*),
                                 multiverse_context *ctx) {
+    // Only create the array if necessary (and thus the special section for this
+    // compilation unit).
     if (elements.size() == 0)
-        return NULL;
+        return;
 
-    auto name = std::string(section_name) + get_source_filename();
+    auto name = std::string(section_name) + "ary_";
     tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, ctx);
 
+    // Set the smallest possible alignment.  The sections of all compilation
+    // units will be merged during linking and will be accessed as a single
+    // array by the multiverse runtime library.
     SET_DECL_ALIGN(ary, 0);
     DECL_USER_ALIGN(ary) = 1;
     set_decl_section_name(ary, section_name);
 
     varpool_node::finalize_decl(ary);
-    return ary;
 }
 
 
