@@ -83,17 +83,17 @@ static int
 multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
                        struct mv_info_fn *fn,
                        struct mv_info_mvfn *mvfn) {
-    unsigned i;
+    struct mv_patchpoint *pp;
 
-    if (mvfn == fn->extra->active_mvfn) return 0;
+    if (mvfn == fn->active_mvfn) return 0;
 
-    for (i = 0; i < fn->extra->n_patchpoints; i++) {
+    for (pp = fn->patchpoints_head; pp != NULL; pp = pp->next) {
         void *from, *to;
-        struct mv_patchpoint *pp = &fn->extra->patchpoints[i];
         unsigned char *location = pp->location;
 
+        // TODO: arch function is_patchpoint_valid??
         if (pp->type == PP_TYPE_INVALID) continue;
-        if (!location) continue;
+        if (!location) continue; // TODO: when does this happen??
 
         multiverse_arch_patchpoint_size(pp, &from, &to);
 
@@ -109,7 +109,7 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
         }
     }
 
-    fn->extra->active_mvfn = mvfn;
+    fn->active_mvfn = mvfn;
 
     return 1; // We changed this function
 }
@@ -128,11 +128,11 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
                 struct mv_info_assignment * assign = &mvfn->assignments[a];
                 // If the assignment of this mvfn depends on an unbound
                 // variable. The mvfn is unsuitable currently.
-                if (!assign->variable->extra->bound) {
+                if (!assign->variable.info->flag_bound) {
                     good = 0;
                 } else {
                     // Variable is bound
-                    mv_value_t cur = multiverse_var_read(assign->variable);
+                    mv_value_t cur = multiverse_var_read(assign->variable.info);
                     if (cur > assign->upper_bound || cur < assign->lower_bound)
                         good = 0;
                 }
@@ -146,22 +146,18 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
     } else {
         // A multiversed function pointer
         // Create "artificial" mvfn according to the function pointer
-        struct mv_info_mvfn* prev_mvfn = fn->extra->active_mvfn;
+        struct mv_info_mvfn* prev_mvfn = fn->active_mvfn;
         struct mv_info_mvfn* new_mvfn =
             multiverse_os_malloc(sizeof(struct mv_info_mvfn));
-        struct mv_info_mvfn_extra* new_mvfn_extra =
-            multiverse_os_malloc(sizeof(struct mv_info_mvfn_extra));
         *new_mvfn = (struct mv_info_mvfn) {
             .function_body = *((void**)fn->function_body),
             .n_assignments = 0,
-            .assignments = NULL,
-            .extra = new_mvfn_extra
+            .assignments = NULL
         };
-        multiverse_arch_decode_mvfn_body(new_mvfn->function_body, new_mvfn_extra);
+        multiverse_arch_decode_mvfn_body(new_mvfn);
         ret = multiverse_select_mvfn(ctx, fn, new_mvfn);
         // Destroy the previous "artificial" mvfn
         if (prev_mvfn != NULL) {
-            multiverse_os_free(prev_mvfn->extra);
             multiverse_os_free(prev_mvfn);
         }
     }
@@ -188,8 +184,8 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
     mv_transaction_ctx_t ctx = mv_transaction_start();
     unsigned f;
-    for (f = 0; f < var->extra->n_functions; ++f) {
-        int r = __multiverse_commit_fn(&ctx, var->extra->functions[f]);
+    for (f = 0; f < var->n_functions; ++f) {
+        int r = __multiverse_commit_fn(&ctx, var->functions[f]);
         if (r < 0) {
             ret = -1;
             break;
@@ -251,8 +247,8 @@ int multiverse_revert_info_refs(struct mv_info_var *var) {
     mv_transaction_ctx_t ctx = mv_transaction_start();
     unsigned f;
 
-    for (f = 0; f < var->extra->n_functions; ++f) {
-        int r = multiverse_select_mvfn(&ctx, var->extra->functions[f], NULL);
+    for (f = 0; f < var->n_functions; ++f) {
+        int r = multiverse_select_mvfn(&ctx, var->functions[f], NULL);
         if (r < 0) {
             ret = -1;
             break;
@@ -293,7 +289,7 @@ int multiverse_revert() {
 
 int multiverse_is_committed(void *function_body) {
     struct mv_info_fn *fn = multiverse_info_fn(function_body);
-    return fn->extra->active_mvfn != NULL;
+    return fn->active_mvfn != NULL;
 }
 
 int multiverse_bind(void *var_location, int state) {
@@ -302,7 +298,7 @@ int multiverse_bind(void *var_location, int state) {
 
     if (state >= 0) {
         if (!var->flag_tracked) return -1;
-        var->extra->bound = state;
+        var->flag_bound = (state != 0);
     }
-    return var->extra->bound;
+    return var->flag_bound;
 }

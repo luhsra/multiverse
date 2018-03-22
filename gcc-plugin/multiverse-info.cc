@@ -1,6 +1,6 @@
 #include "gcc-common.h"
 #include <tree-iterator.h>
-#include <sstream>
+#include <string>
 #include "multiverse.h"
 
 typedef multiverse_context::func_t func_t;
@@ -20,6 +20,8 @@ static tree build_info_callsite(callsite_t &, multiverse_context *);
 static tree build_info_mvfn(mvfn_t &, multiverse_context *);
 static tree build_info_assignment(var_assign_t &, multiverse_context *);
 
+static int name_counter = 0;
+
 
 static tree get_mv_unsigned_t(void)
 {
@@ -27,52 +29,76 @@ static tree get_mv_unsigned_t(void)
     return lang_hooks.types.type_for_mode(mode, true);
 }
 
-/*
- * Build a coverage variable of TYPE for function FN_DECL.  If COUNTER >= 0 it
- * is a counter array, otherwise it is the function structure.
- */
-static tree build_var(tree type, std::string prefix)
-{
-    tree var = build_decl(BUILTINS_LOCATION, VAR_DECL, NULL_TREE, type);
-    static int counter = 0;
-    std::stringstream ss;
-    ss << prefix << counter ++;
-    std::string name = ss.str();
 
-    DECL_NAME(var) = get_identifier(name.c_str());
-    TREE_STATIC(var) = 1;
-    TREE_ADDRESSABLE(var) = 1;
-    DECL_NONALIASED(var) = 1;
-    SET_DECL_ALIGN(var, TYPE_ALIGN(type));
-
-    return var;
+static const char *get_source_filename(void) {
+    return expand_location(input_location).file;
 }
 
 
 template<typename Seq, typename T>
-static tree build_array_from_list(Seq &elements,
-                                  tree element_type,
-                                  tree (*build_obj_ptr)(T&, multiverse_context*),
-                                  multiverse_context *ctx,
-                                  const char *custom_section = NULL)
+static tree get_array_decl(const char *name,
+                           Seq &elements,
+                           tree element_type,
+                           tree (*build_obj)(T&, multiverse_context*),
+                           multiverse_context *ctx)
 {
-    tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_QUAL_CONST),
+    // TODO: some of them may be TYPE_QUAL_CONST
+    tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_UNQUALIFIED),
                                      build_index_type(size_int(elements.size()-1)));
 
     vec<constructor_elt, va_gc> *ary_ctor = NULL;
     for (auto &data : elements) {
-        tree obj = build_obj_ptr(data, ctx);
+        tree obj = build_obj(data, ctx);
         CONSTRUCTOR_APPEND_ELT(ary_ctor, NULL, obj);
     }
 
-    tree ary = build_var(ary_type, "__multiverse_ary.");
+    tree ary = build_decl(BUILTINS_LOCATION, VAR_DECL, NULL_TREE, ary_type);
+    SET_DECL_ASSEMBLER_NAME(ary, get_identifier(name));
+    TREE_STATIC(ary) = 1;
+    TREE_ADDRESSABLE(ary) = 1;
+    DECL_NONALIASED(ary) = 1;
+    DECL_VISIBILITY_SPECIFIED(ary) = 1;
+    DECL_VISIBILITY(ary) = VISIBILITY_HIDDEN;
     DECL_INITIAL(ary) = build_constructor(ary_type, ary_ctor);
 
-    if (custom_section)
-        set_decl_section_name(ary, custom_section);
+    return ary;
+}
+
+
+template<typename Seq, typename T>
+static tree build_array(Seq &elements,
+                        tree element_type,
+                        tree (*build_obj)(T&, multiverse_context*),
+                        multiverse_context *ctx)
+{
+    if (elements.size() == 0)
+        return NULL;
+
+    auto name = std::string("__multiverse_ary_") + std::to_string(name_counter++);
+    tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, ctx);
 
     varpool_node::finalize_decl(ary);
+    return ary;
+}
 
+
+template<typename Seq, typename T>
+static tree build_section_array(const char *section_name,
+                                Seq &elements,
+                                tree element_type,
+                                tree (*build_obj)(T&, multiverse_context*),
+                                multiverse_context *ctx) {
+    if (elements.size() == 0)
+        return NULL;
+
+    auto name = std::string(section_name) + get_source_filename();
+    tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, ctx);
+
+    SET_DECL_ALIGN(ary, 0);
+    DECL_USER_ALIGN(ary) = 1;
+    set_decl_section_name(ary, section_name);
+
+    varpool_node::finalize_decl(ary);
     return ary;
 }
 
@@ -95,16 +121,16 @@ static void build_info(multiverse_context *ctx) {
     // TODO: MV_VERSION ???
 
     /* variables */
-    build_array_from_list(ctx->variables, ctx->var_type,
-                          build_info_var, ctx, "__multiverse_var_");
+    build_section_array("__multiverse_var_", ctx->variables, ctx->var_type,
+                        build_info_var, ctx);
 
     /* functions */
-    build_array_from_list(ctx->functions, ctx->fn_type,
-                          build_info_fn, ctx, "__multiverse_fn_");
+    build_section_array("__multiverse_fn_", ctx->functions, ctx->fn_type,
+                        build_info_fn, ctx);
 
     /* callsites */
-    build_array_from_list(ctx->callsites, ctx->callsite_type,
-                          build_info_callsite, ctx, "__multiverse_callsite_");
+    build_section_array("__multiverse_callsite_", ctx->callsites,
+                        ctx->callsite_type, build_info_callsite, ctx);
 }
 
 
@@ -117,6 +143,9 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
 
         unsigned int n_mv_functions;
         struct mv_info_mvfn ** mv_functions;
+
+        struct mv_patchpoint * patchpoints_head;
+        struct mv_info_mvfn * active_mvfn;
       };
     */
 
@@ -134,7 +163,11 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
     /* mv_functions pointer */
     RECORD_FIELD(build_qualified_type(info_mvfn_ptr_type, TYPE_QUAL_CONST));
 
-    /* void * data */
+    /* Fields initialized by the runtime system */
+    /* patchpoints_head */
+    RECORD_FIELD(build_pointer_type(void_type_node));
+
+    /* active_mvfn */
     RECORD_FIELD(build_pointer_type(void_type_node));
 
     finish_builtin_struct(info_fn_type, "__mv_info_fn", fields, NULL_TREE);
@@ -175,14 +208,15 @@ static tree build_info_fn(func_t &fn_info, multiverse_context *ctx)
     info_fields = DECL_CHAIN(info_fields);
 
     /* mv_functions -- */
-    tree mvfn_ary = build_array_from_list(fn_info.mv_functions,
-                                          ctx->mvfn_ptr_type,
-                                          build_info_mvfn, ctx);
+    tree mvfn_ary = build_array(fn_info.mv_functions, ctx->mvfn_ptr_type,
+                                build_info_mvfn, ctx);
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR, ctx->mvfn_ptr_type, mvfn_ary));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* void * data; */
+    /* Fields initialized by the runtime system */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
+    info_fields = DECL_CHAIN(info_fields);
     CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
     info_fields = DECL_CHAIN(info_fields);
 
@@ -201,13 +235,15 @@ static void build_info_variable_type(tree info_variable_type)
         void * variable;
         struct {
               unsigned int
+                 variable_width  : 4,
+                 reserved        : 25,
                  flag_signed     : 1,
                  flag_tracked    : 1,
-                 reserved        : 26,
-                 variable_width  : 4;
+                 flag_bound      : 1,
         } __attribute__((packed));
 
-        void * data;
+        unsigned int n_functions;
+        struct mv_info_fn **functions;
       };
     */
     tree field, fields = NULL_TREE;
@@ -221,7 +257,10 @@ static void build_info_variable_type(tree info_variable_type)
     /* info - uint32_t */
     RECORD_FIELD(uint32_type_node);
 
-    /* void * data */
+    /* Fields initialized by the runtime system */
+    /* n_functions */
+    RECORD_FIELD(integer_type_node);
+    /* functions */
     RECORD_FIELD(build_pointer_type(void_type_node));
 
     finish_builtin_struct(info_variable_type, "__mv_info_var", fields, NULL_TREE);
@@ -257,14 +296,19 @@ static tree build_info_var(variable_t &var_info, multiverse_context *ctx)
     int flag_signed = !TYPE_UNSIGNED(type);
     int flag_tracked = !!var_info.tracked;
     gcc_assert(width < 16);
-    uint32_t info = (flag_signed << 31) | (flag_tracked << 30) | width;
+    uint32_t info = ((!flag_tracked) << 31) | (flag_signed << 30) |
+                    (flag_tracked << 29) | width;
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                             build_int_cstu(TREE_TYPE(info_fields), info));
     info_fields = DECL_CHAIN(info_fields);
 
-    /* void * data Filled by Runtime System */
+    /* Fields initialized by the runtime system */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build_int_cstu(TREE_TYPE(info_fields), 0));
+    info_fields = DECL_CHAIN(info_fields);
     CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
     info_fields = DECL_CHAIN(info_fields);
+
 
     gcc_assert(!info_fields); // All fields are filled
 
@@ -324,13 +368,14 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
         unsigned int n_assignments;
         struct mv_info_assignment * assignments;
 
-        void * extra;
+        int type;
+        mv_value_t constant;
       };
     */
     tree field, fields = NULL_TREE;
 
     /* Pointer to function body */
-    RECORD_FIELD(build_pointer_type (void_type_node));
+    RECORD_FIELD(build_pointer_type(void_type_node));
 
     /* n_assignments */
     RECORD_FIELD(get_mv_unsigned_t());
@@ -338,10 +383,15 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
     /* mv_assignments pointer */
     RECORD_FIELD(build_qualified_type(info_assignment_ptr_type, TYPE_QUAL_CONST));
 
-    /* user data = NULL */
-    RECORD_FIELD(build_pointer_type (void_type_node));
+    /* Fields initialized by the runtime system */
+    /* normal integer */
+    RECORD_FIELD(integer_type_node);
 
-    finish_builtin_struct(info_mvfn_type, "__mv_info_mvfn", fields, NULL_TREE);
+    /* mv value integer */
+    RECORD_FIELD(get_mv_unsigned_t());
+
+    finish_builtin_struct(info_mvfn_type, "__mv_info_mvfn", fields,
+                          NULL_TREE);
 }
 
 
@@ -364,19 +414,20 @@ static tree build_info_mvfn(mvfn_t &mvfn_info, multiverse_context *ctx)
     info_fields = DECL_CHAIN(info_fields);
 
     /* mv_assignments */
-    tree assigns_ary = build_array_from_list(mvfn_info.assignments,
-                                             ctx->assignment_type,
-                                             build_info_assignment,
-                                             ctx);
+    tree assigns_ary = build_array(mvfn_info.assignments, ctx->assignment_type,
+                                   build_info_assignment, ctx);
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR, ctx->assignment_ptr_type, assigns_ary));
 
     info_fields = DECL_CHAIN(info_fields);
 
-    /* void * extra = NULL */
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields, null_pointer_node);
+    /* Fields initialized by the runtime system */
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build_int_cstu(TREE_TYPE(info_fields), 0));
     info_fields = DECL_CHAIN(info_fields);
-
+    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                           build_int_cstu(TREE_TYPE(info_fields), 0));
+    info_fields = DECL_CHAIN(info_fields);
 
     gcc_assert(!info_fields); // All fields are filled
 
@@ -390,7 +441,7 @@ static void build_info_assignment_type(tree info_assignment_type, tree info_var_
 {
     /*
       struct __mv_info_assignment {
-        struct mv_info_var * variable;
+        void *variable_location;
         int lower_bound;
         int upper_bound;
       };
@@ -399,7 +450,7 @@ static void build_info_assignment_type(tree info_assignment_type, tree info_var_
     tree field, fields = NULL_TREE;
 
     /* Variable this assignment refers to */
-    RECORD_FIELD(info_var_ptr_type);
+    RECORD_FIELD(build_pointer_type(void_type_node));
 
     /* lower limit */
     RECORD_FIELD(get_mv_unsigned_t());
@@ -407,7 +458,8 @@ static void build_info_assignment_type(tree info_assignment_type, tree info_var_
     /* upper limit */
     RECORD_FIELD(get_mv_unsigned_t());
 
-    finish_builtin_struct(info_assignment_type, "__mv_info_assignment", fields, NULL_TREE);
+    finish_builtin_struct(info_assignment_type, "__mv_info_assignment",
+                          fields, NULL_TREE);
 }
 
 

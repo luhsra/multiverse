@@ -23,13 +23,21 @@ struct mv_info_fn;
 struct mv_info_callsite;
 struct mv_patchpoint;
 
-typedef unsigned int mv_value_t;
+typedef __UINT_LEAST32_TYPE__ mv_value_t;
+
 
 struct mv_info_assignment {
-    struct mv_info_var * variable; // Given as a variable_location pointer
+    union {
+        // The GCC plugin generates a variable_location pointer which will be
+        // used by the runtime system to determine and save the mv_info_var that
+        // belongs to the pointer.
+        void *location;
+        struct mv_info_var *info;
+    } variable;
     mv_value_t lower_bound;
     mv_value_t upper_bound;
 };
+
 
 typedef enum {
     MVFN_TYPE_NONE,
@@ -39,78 +47,128 @@ typedef enum {
     MVFN_TYPE_STI,
 } mvfn_type_t;
 
-struct mv_info_mvfn_extra {
-    mvfn_type_t type;
+
+struct mv_info_mvfn {
+    // static
+    void *function_body;             // A pointer to the mvfn's function body
+    unsigned int n_assignments;      // The mvfn's variable assignments
+    struct mv_info_assignment *assignments;
+
+    // runtime
+    int type;                        // This is be interpreted as mv_type_t
+                                     // (declared as integer to ensure correct size)
     mv_value_t constant;
 };
 
+//  struct mv_info_mvfn_extra {
+//      mvfn_type_t type;
+//      mv_value_t constant;
+//  };
+//
+//
+//  struct mv_info_mvfn {
+//      void * function_body;
+//      unsigned int n_assignments;
+//      struct mv_info_assignment * assignments;
+//      union {
+//          void *data;
+//          struct mv_info_mvfn_extra *extra;
+//      };
+//  };
 
-struct mv_info_mvfn {
-    void * function_body;
-    unsigned int n_assignments;
-    struct mv_info_assignment * assignments;
-    union {
-        void *data;
-        struct mv_info_mvfn_extra *extra;
-    };
-};
-
-struct mv_info_fn_extra {
-    unsigned int n_patchpoints;
-    struct mv_patchpoint *patchpoints;
-    struct mv_info_mvfn *active_mvfn;
-};
 
 struct mv_info_fn {
-    char * const name;
+    // static
+    char *const name;                // Functions's symbol name
+    void *function_body;             // A pointer to the original (generic) function body
+    unsigned int n_mv_functions;     // Specialized multiverse variant functions of this function
+    struct mv_info_mvfn *mv_functions;
 
-    /* Where is the original function body located in the text
-     * segment? */
-    void * function_body;
-
-    /* What variants exist for this function */
-    unsigned int n_mv_functions;
-    struct mv_info_mvfn * mv_functions;
-
-    union {
-        void *data;
-        struct mv_info_fn_extra * extra;
-    };
+    // runtime
+    struct mv_patchpoint *patchpoints_head;  // Patchpoints as linked list TODO: arch-specific
+    struct mv_info_mvfn *active_mvfn; // The currently active mvfn
 };
 
+//  struct mv_info_fn_extra {
+//      unsigned int n_patchpoints;
+//      struct mv_patchpoint *patchpoints;
+//      struct mv_info_mvfn *active_mvfn;
+//  };
+//
+//  struct mv_info_fn {
+//      char * const name;
+//
+//      /* Where is the original function body located in the text
+//       * segment? */
+//      void * function_body;
+//
+//      /* What variants exist for this function */
+//      unsigned int n_mv_functions;
+//      struct mv_info_mvfn * mv_functions;
+//
+//      union {
+//          void *data;
+//          struct mv_info_fn_extra * extra;
+//      };
+//  };
+
+
 struct mv_info_callsite {
+    // static
     void *function_body;
     void *call_label;
 };
 
 
-struct mv_info_var_extra {
-    unsigned int n_functions;
-    struct mv_info_fn **functions;
-    char bound;
-};
-
-
 struct mv_info_var {
-    char * const  name;
-    void *        variable_location;
-
+    // static
+    char *const name;                // Variable's symbol name
+    void *variable_location;         // A pointer to the variable
     union {
         unsigned int info;
         struct {
             unsigned int
-                variable_width  : 4,
-                reserved        : 26,
-                flag_tracked    : 1,
-                flag_signed     : 1;
+                variable_width : 4,  // Width of the variable in bytes
+                reserved       : 25, // Currently not used
+                flag_tracked   : 1,  // Determines if the variable is tracked
+                flag_signed    : 1,  // Determines if the variable is signed
+                flag_bound     : 1;  // 1 if the variable is bound, 0 if not
+                                     // -> this flag is mutable
         };
     };
 
-    union {
-        void *data;
-        struct mv_info_var_extra *extra;
-    };
+    // runtime
+    unsigned int n_functions;        // Functions referening this variable
+    struct mv_info_fn **functions;
 };
+
+//  struct mv_info_var_extra {
+//      unsigned int n_functions;
+//      struct mv_info_fn **functions;
+//      char bound;
+//  };
+//
+//
+//  struct mv_info_var {
+//      char * const  name;
+//      void *        variable_location;
+//
+//      union {
+//          unsigned int info;
+//          struct {
+//              unsigned int
+//                  variable_width  : 4,
+//                  reserved        : 26,
+//                  flag_tracked    : 1,
+//                  flag_signed     : 1;
+//          };
+//      };
+//
+//      union {
+//          void *data;
+//          struct mv_info_var_extra *extra;
+//      };
+//  };
 
 
 int multiverse_init(void);

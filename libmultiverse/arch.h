@@ -40,8 +40,7 @@ void multiverse_arch_decode_callsite(struct mv_info_fn *fn, void *callsite,
   as a NOP.
 */
 
-void multiverse_arch_decode_mvfn_body(void * addr,
-                                      struct mv_info_mvfn_extra *info);
+void multiverse_arch_decode_mvfn_body(struct mv_info_mvfn *info);
 
 /**
   @brief applies the mvfn to the patchpoint

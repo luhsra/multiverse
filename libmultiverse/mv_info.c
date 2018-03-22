@@ -35,38 +35,27 @@ multiverse_info_fn(void  *function_body) {
 
 static
 int mv_info_fn_patchpoint_append(struct mv_info_fn *fn, struct mv_patchpoint pp){
-    int n = fn->extra->n_patchpoints;
-    fn->extra->patchpoints =
-        multiverse_os_realloc(fn->extra->patchpoints,
-                              (n + 1) * sizeof(struct mv_patchpoint));
-    if (!fn->extra->patchpoints) return -1; //FIXME: Error
-    fn->extra->patchpoints[fn->extra->n_patchpoints++] = pp;
+    struct mv_patchpoint **p = &fn->patchpoints_head;
+
+    while (*p != NULL)
+        p = &(*p)->next;
+
+    *p = multiverse_os_malloc(sizeof(struct mv_patchpoint));
+    if (p == NULL)
+        return -1; // FIXME: Error
+
+    **p = pp;
+    (*p)->next = NULL;
+
     return 0;
 }
 
 int multiverse_init() {
-    struct mv_info_var *var;
     struct mv_info_fn *fn;
     struct mv_info_callsite *callsite;
 
-    /* Step 1: Set up all extra datastructures */
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
-        fn->extra = multiverse_os_calloc(1, sizeof(struct mv_info_fn_extra));
-        if (!fn->extra) return -1;
-    }
-    for (var = &__start___multiverse_var_; var < &__stop___multiverse_var_; var++) {
-        var->extra = multiverse_os_calloc(1, sizeof(struct mv_info_var_extra));
-        if (!var->extra) return -1;
-
-        if (var->flag_tracked)
-            var->extra->bound = 0;
-        else
-            var->extra->bound = 1;
-    }
-
-
     // Step 2: Connect all the moving parts from all compilation units
-    //         and fill the extra data.
+    //         and fill the runtime data.
     for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
         unsigned j;
 
@@ -87,42 +76,37 @@ int multiverse_init() {
             struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
             // Let's see if we can extract further information
             // for our multiverse function, like: constant return value.
-            struct mv_info_mvfn_extra extra;
-            multiverse_arch_decode_mvfn_body(mvfn->function_body, &extra);
-            if (extra.type != MVFN_TYPE_NONE) {
-                mvfn->extra = multiverse_os_malloc(sizeof(extra));
-                MV_ASSERT(mvfn->extra != NULL);
-                *mvfn->extra = extra;
-            }
+            multiverse_arch_decode_mvfn_body(mvfn);
+
             for (x = 0; x < mvfn->n_assignments; x++) {
                 int found;
                 unsigned idx;
 
                 // IMPORTANT: Setup variable pointer
                 struct mv_info_assignment *assign = &mvfn->assignments[x];
-                struct mv_info_var * fvar = multiverse_info_var(assign->variable);
+                struct mv_info_var* fvar = multiverse_info_var(assign->variable.location);
 
                 MV_ASSERT(fvar != NULL);
-                assign->variable = fvar;
+                assign->variable.info = fvar;
 
                 MV_ASSERT(assign->lower_bound <= assign->upper_bound);
 
                 // Add function to list of associated functions of
                 // variable, if not yet present
                 found = 0;
-                for (idx = 0; idx < fvar->extra->n_functions; idx++) {
-                    if (fvar->extra->functions[idx] == fn) {
+                for (idx = 0; idx < fvar->n_functions; idx++) {
+                    if (fvar->functions[idx] == fn) {
                         found = 1;
                         break;
                     }
                 }
                 if (!found) {
-                    int n = fvar->extra->n_functions;
-                    fvar->extra->functions =
-                        multiverse_os_realloc(fvar->extra->functions, (n + 1)
+                    int n = fvar->n_functions;
+                    fvar->functions =
+                        multiverse_os_realloc(fvar->functions, (n + 1)
                                               * sizeof(struct mv_info_fn *));
-                    if (!fvar->extra->functions) return -1;
-                    fvar->extra->functions[fvar->extra->n_functions++] = fn;
+                    if (!fvar->functions) return -1;
+                    fvar->functions[fvar->n_functions++] = fn;
                 }
             }
 
@@ -161,37 +145,37 @@ void multiverse_dump_info(void) {
 
     for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
         unsigned j;
-        multiverse_os_print("  fn: %s %p, %d variants, %d patchpoints(s)\n",
+        multiverse_os_print("  fn: %s %p, %d variants\n", /*", %d patchpoints(s)\n",*/
                             fn->name,
                             fn->function_body,
-                            fn->n_mv_functions,
-                            fn->extra->n_patchpoints);
+                            fn->n_mv_functions
+                            /*fn->extra->n_patchpoints*/);
         for (j = 0; j < fn->n_mv_functions; j++) {
             unsigned x;
             struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
             // Execute function mv_func();
             multiverse_os_print("    mvfn: %p (vars %d)",
                                 mvfn->function_body, mvfn->n_assignments);
-            if (fn->extra->active_mvfn == mvfn) {
+            if (fn->active_mvfn == mvfn) {
                 multiverse_os_print("<-- active");
             }
             multiverse_os_print("\n");
             for (x = 0; x < mvfn->n_assignments; x++) {
                 struct mv_info_assignment *assign = &mvfn->assignments[x];
                 multiverse_os_print("      assign: %s in [%d, %d]\n",
-                                    assign->variable->name,
+                                    assign->variable.info->name,
                                     assign->lower_bound,
                                     assign->upper_bound);
             }
 
         }
-        for (j = 0; j < fn->extra->n_patchpoints; ++j) {
-            struct mv_patchpoint *fvar = &fn->extra->patchpoints[j];
-            multiverse_os_print("    patchpoint: [%d:%p] -> %s\n",
-                                fvar->type,
-                                fvar->location,
-                                fvar->function->name);
-        }
+        /* for (j = 0; j < fn->extra->n_patchpoints; ++j) { */
+        /*     struct mv_patchpoint *fvar = &fn->extra->patchpoints[j]; */
+        /*     multiverse_os_print("    patchpoint: [%d:%p] -> %s\n", */
+        /*                         fvar->type, */
+        /*                         fvar->location, */
+        /*                         fvar->function->name); */
+        /* } */
     }
 
     /* TDOD */
@@ -203,6 +187,6 @@ void multiverse_dump_info(void) {
                             var->variable_width,
                             var->flag_tracked,
                             var->flag_signed,
-                            var->extra->n_functions);
+                            var->n_functions);
     }
 }

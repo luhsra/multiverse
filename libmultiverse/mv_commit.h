@@ -9,9 +9,10 @@ typedef enum  {
 } mv_info_patchpoint_type;
 
 struct mv_patchpoint {
-    mv_info_patchpoint_type type;
+    struct mv_patchpoint *next;
     struct mv_info_fn *function;
-    void *location;
+    void *location;                // == callsite call_label
+    mv_info_patchpoint_type type;
 
     // Here we swap in the code, we overwrite
     unsigned char swapspace[6];
