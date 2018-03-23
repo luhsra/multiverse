@@ -14,16 +14,7 @@
 typedef unsigned HOST_WIDE_INT mv_value_t;
 
 
-
 struct multiverse_context {
-    // data types used for the descriptors
-    tree info_type, info_ptr_type;
-    tree fn_type, fn_ptr_type;
-    tree var_type, var_ptr_type;
-    tree mvfn_type, mvfn_ptr_type;
-    tree assignment_type, assignment_ptr_type;
-    tree callsite_type, callsite_ptr_type;
-
     struct variable_t {
         tree var_decl;
         bool tracked;
@@ -55,12 +46,12 @@ struct multiverse_context {
     };
 
     struct func_t {
-        tree fn_decl;			 /* the function decl */
+        tree fn_decl;                    /* the function decl */
         std::list<mvfn_t> mv_functions;
     };
 
     struct callsite_t {
-        tree fn_decl;			 /* the function decl */
+        tree fn_decl;                    /* the function decl */
         tree callsite_label;
     };
 
@@ -92,6 +83,31 @@ struct multiverse_context {
     }
 
 };
+
+
+/*
+ * Contains the types for the multiverse info descriptors.
+ */
+struct multiverse_info_types {
+    const tree fn_type, fn_ptr_type;
+    const tree var_type, var_ptr_type;
+    const tree mvfn_type, mvfn_ptr_type;
+    const tree assignment_type, assignment_ptr_type;
+    const tree callsite_type, callsite_ptr_type;
+
+    /* Constructs all the multiverse descriptor types and returns them. */
+    static multiverse_info_types build();
+
+private:
+    multiverse_info_types(tree fn_type, tree fn_ptr_type,
+                          tree var_type, tree var_ptr_type,
+                          tree mvfn_type, tree mvfn_ptr_type,
+                          tree assignment_type,
+                          tree assignment_ptr_type,
+                          tree callsite_type,
+                          tree callsite_ptr_type);
+};
+
 
 /*
  * The multiverse generator is used to capture all dimensions (variables) and
