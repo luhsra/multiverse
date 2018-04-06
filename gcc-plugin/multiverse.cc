@@ -49,6 +49,9 @@ struct plugin_info mv_plugin_info = {
     .help = "function multiversing plugin\n"
 };
 
+
+#ifdef CONFIG_DEBUG_OUT
+
 #define dump_file stderr
 
 #define debug_printf(args...) do {              \
@@ -56,6 +59,13 @@ struct plugin_info mv_plugin_info = {
             fprintf(dump_file, args);           \
         }                                       \
     } while(0)
+
+#else
+
+#define dump_file NULL
+#define debug_printf(args...) {}
+
+#endif
 
 
 struct multiverse_context mv_ctx;
@@ -325,7 +335,7 @@ static void replace_and_constify(tree old_var, const int value)
                 update_stmt(stmt);
 
                 if (dump_file) {
-                    fprintf(dump_file, ".. found multiverse variable in statement, replacing: ");
+                    debug_printf(".. found multiverse variable in statement, replacing: ");
                     print_gimple_stmt(dump_file, stmt, 0, TDF_SLIM);
                 }
             }
@@ -363,9 +373,7 @@ static unsigned int multiverse_function(func_t &fn_info,
 
     fname += ".multiverse" + ss.str();
 
-    if (dump_file) {
-        fprintf(dump_file, "generating function clone %s\n", fname.c_str());
-    }
+    debug_printf("generating function clone %s\n", fname.c_str());
 
     clone = clone_fndecl(fndecl, fname);
     gcc_assert(clone != fndecl);
@@ -541,7 +549,7 @@ static unsigned int mv_variant_generation_execute()
                     continue;
 
                 if (dump_file) {
-                    fprintf(dump_file, "found multiverse operand: ");
+                    debug_printf("found multiverse operand: ");
                     print_generic_stmt(dump_file, var, 0);
                 }
 
@@ -578,10 +586,8 @@ static unsigned int mv_variant_generation_execute()
         }
     }
 
-    if (dump_file) {
-        fprintf(dump_file, "...found '%ld' multiverse variables (%ld blacklisted)\n",
-                mv_vars.size(), mv_blacklist.size());
-    }
+    debug_printf("...found '%ld' multiverse variables (%ld blacklisted)\n",
+                 mv_vars.size(), mv_blacklist.size());
 
     // Remove blacklisted variables from the mv_vars set.
     for (auto & black : mv_blacklist) {
@@ -665,10 +671,8 @@ static unsigned int mv_variant_generation_execute()
         num_clones += multiverse_function(fn_data, assignment);
     }
 
-    if (dump_file) {
-        fprintf(dump_file, "Generated %d specialized functions for %s\n",
-                num_clones, fname.c_str());
-    }
+    debug_printf("Generated %d specialized functions for %s\n",
+                 num_clones, fname.c_str());
 
     return 0;
 }

@@ -181,6 +181,7 @@ static void build_info_assignment_type(tree info_assignment_type)
 
 multiverse_info_types multiverse_info_types::build()
 {
+    (void) gcc_version;
     tree fn_type = lang_hooks.types.make_type(RECORD_TYPE);
     tree var_type = lang_hooks.types.make_type(RECORD_TYPE);
     tree mvfn_type = lang_hooks.types.make_type(RECORD_TYPE);
