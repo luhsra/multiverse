@@ -67,6 +67,8 @@ struct multiverse_context mv_ctx;
 static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                 bool *no_add_attrs)
 {
+    (void) flags;
+    (void) no_add_attrs;
     int type = TREE_CODE(TREE_TYPE(*node));
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE || type == BOOLEAN_TYPE) {
@@ -186,6 +188,8 @@ static struct attribute_spec mv_attribute =
  */
 static void register_mv_attribute(void *event_data, void *data)
 {
+    (void) event_data;
+    (void) data;
     register_attribute(&mv_attribute);
 }
 
