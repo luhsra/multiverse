@@ -60,22 +60,6 @@ struct mv_info_mvfn {
     mv_value_t constant;
 };
 
-//  struct mv_info_mvfn_extra {
-//      mvfn_type_t type;
-//      mv_value_t constant;
-//  };
-//
-//
-//  struct mv_info_mvfn {
-//      void * function_body;
-//      unsigned int n_assignments;
-//      struct mv_info_assignment * assignments;
-//      union {
-//          void *data;
-//          struct mv_info_mvfn_extra *extra;
-//      };
-//  };
-
 
 struct mv_info_fn {
     // static
@@ -88,29 +72,6 @@ struct mv_info_fn {
     struct mv_patchpoint *patchpoints_head;  // Patchpoints as linked list TODO: arch-specific
     struct mv_info_mvfn *active_mvfn; // The currently active mvfn
 };
-
-//  struct mv_info_fn_extra {
-//      unsigned int n_patchpoints;
-//      struct mv_patchpoint *patchpoints;
-//      struct mv_info_mvfn *active_mvfn;
-//  };
-//
-//  struct mv_info_fn {
-//      char * const name;
-//
-//      /* Where is the original function body located in the text
-//       * segment? */
-//      void * function_body;
-//
-//      /* What variants exist for this function */
-//      unsigned int n_mv_functions;
-//      struct mv_info_mvfn * mv_functions;
-//
-//      union {
-//          void *data;
-//          struct mv_info_fn_extra * extra;
-//      };
-//  };
 
 
 struct mv_info_callsite {
@@ -141,34 +102,6 @@ struct mv_info_var {
     unsigned int n_functions;        // Functions referening this variable
     struct mv_info_fn **functions;
 };
-
-//  struct mv_info_var_extra {
-//      unsigned int n_functions;
-//      struct mv_info_fn **functions;
-//      char bound;
-//  };
-//
-//
-//  struct mv_info_var {
-//      char * const  name;
-//      void *        variable_location;
-//
-//      union {
-//          unsigned int info;
-//          struct {
-//              unsigned int
-//                  variable_width  : 4,
-//                  reserved        : 26,
-//                  flag_tracked    : 1,
-//                  flag_signed     : 1;
-//          };
-//      };
-//
-//      union {
-//          void *data;
-//          struct mv_info_var_extra *extra;
-//      };
-//  };
 
 
 int multiverse_init(void);
