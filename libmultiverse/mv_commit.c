@@ -145,21 +145,25 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
         ret = multiverse_select_mvfn(ctx, fn, best_mvfn);
     } else {
         // A multiversed function pointer
-        // Create "artificial" mvfn according to the function pointer
-        struct mv_info_mvfn* prev_mvfn = fn->active_mvfn;
-        struct mv_info_mvfn* new_mvfn =
-            multiverse_os_malloc(sizeof(struct mv_info_mvfn));
+        // Create an "artificial" mvfn according to the function pointer
+        struct mv_info_mvfn* new_mvfn = (fn->active_mvfn != NULL) ? fn->active_mvfn
+            : multiverse_os_malloc(sizeof(struct mv_info_mvfn));
         *new_mvfn = (struct mv_info_mvfn) {
             .function_body = *((void**)fn->function_body),
             .n_assignments = 0,
             .assignments = NULL
         };
+        fn->active_mvfn = NULL;
         multiverse_arch_decode_mvfn_body(new_mvfn);
         ret = multiverse_select_mvfn(ctx, fn, new_mvfn);
-        // Destroy the previous "artificial" mvfn
-        if (prev_mvfn != NULL) {
-            multiverse_os_free(prev_mvfn);
-        }
+        //
+        //
+        // FIXME: This is a memory leak
+        //        active_mvfn is never freed when multiverse_select_mvfn is
+        //        called with mvfn=NULL
+        //        Solution: function pointers should be handled separately
+        //
+        //
     }
     return ret;
 }
@@ -182,10 +186,11 @@ int multiverse_commit_fn(void *function_body) {
 
 int multiverse_commit_info_refs(struct mv_info_var *var) {
     int ret = 0;
+    struct mv_info_fn_ref *fref;
     mv_transaction_ctx_t ctx = mv_transaction_start();
-    unsigned f;
-    for (f = 0; f < var->n_functions; ++f) {
-        int r = __multiverse_commit_fn(&ctx, var->functions[f]);
+
+    for (fref = var->functions_head; fref != NULL; fref = fref->next) {
+        int r = __multiverse_commit_fn(&ctx, fref->fn);
         if (r < 0) {
             ret = -1;
             break;
@@ -244,11 +249,11 @@ int multiverse_revert_fn(void *function_body) {
 
 int multiverse_revert_info_refs(struct mv_info_var *var) {
     int ret = 0;
+    struct mv_info_fn_ref *fref;
     mv_transaction_ctx_t ctx = mv_transaction_start();
-    unsigned f;
 
-    for (f = 0; f < var->n_functions; ++f) {
-        int r = multiverse_select_mvfn(&ctx, var->functions[f], NULL);
+    for (fref = var->functions_head; fref != NULL; fref = fref->next) {
+        int r = multiverse_select_mvfn(&ctx, fref->fn, NULL);
         if (r < 0) {
             ret = -1;
             break;

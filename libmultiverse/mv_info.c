@@ -41,11 +41,28 @@ int mv_info_fn_patchpoint_append(struct mv_info_fn *fn, struct mv_patchpoint pp)
         p = &(*p)->next;
 
     *p = multiverse_os_malloc(sizeof(struct mv_patchpoint));
-    if (p == NULL)
+    if (*p == NULL)
         return -1; // FIXME: Error
 
     **p = pp;
     (*p)->next = NULL;
+
+    return 0;
+}
+
+static
+int mv_info_var_fn_append(struct mv_info_var *var, struct mv_info_fn *fn) {
+    struct mv_info_fn_ref **f = &var->functions_head;
+
+    while (*f != NULL)
+        f = &(*f)->next;
+
+    *f = multiverse_os_malloc(sizeof(struct mv_info_fn_ref));
+    if (*f == NULL)
+        return -1; // FIXME: Error
+
+    (*f)->next = NULL;
+    (*f)->fn = fn;
 
     return 0;
 }
@@ -80,7 +97,7 @@ int multiverse_init() {
 
             for (x = 0; x < mvfn->n_assignments; x++) {
                 int found;
-                unsigned idx;
+                struct mv_info_fn_ref *fref;
 
                 // IMPORTANT: Setup variable pointer
                 struct mv_info_assignment *assign = &mvfn->assignments[x];
@@ -91,25 +108,20 @@ int multiverse_init() {
 
                 MV_ASSERT(assign->lower_bound <= assign->upper_bound);
 
-                // Add function to list of associated functions of
-                // variable, if not yet present
+                // Add function to list of associated functions of variable
+                // if not yet present.
                 found = 0;
-                for (idx = 0; idx < fvar->n_functions; idx++) {
-                    if (fvar->functions[idx] == fn) {
+                for (fref = fvar->functions_head; fref != NULL; fref = fref->next) {
+                    if (fref->fn == fn) {
                         found = 1;
                         break;
                     }
                 }
                 if (!found) {
-                    int n = fvar->n_functions;
-                    fvar->functions =
-                        multiverse_os_realloc(fvar->functions, (n + 1)
-                                              * sizeof(struct mv_info_fn *));
-                    if (!fvar->functions) return -1;
-                    fvar->functions[fvar->n_functions++] = fn;
+                    int ret = mv_info_var_fn_append(fvar, fn);
+                    if (ret != 0) return ret;
                 }
             }
-
         }
     }
 
@@ -136,7 +148,7 @@ int multiverse_init() {
 }
 
 void multiverse_dump_info(void) {
-    struct mv_info_var *var;
+    /* struct mv_info_var *var; */
     struct mv_info_fn *fn;
 
     /* TODO */
@@ -180,13 +192,13 @@ void multiverse_dump_info(void) {
 
     /* TDOD */
     /* multiverse_os_print("%d variables were multiversed\n", info->n_variables); */
-    for (var = &__start___multiverse_var_; var < &__stop___multiverse_var_; var++) {
-        multiverse_os_print("  var: %s %p (width %d, tracked:%d, signed:%d), %d functions\n",
-                            var->name,
-                            var->variable_location,
-                            var->variable_width,
-                            var->flag_tracked,
-                            var->flag_signed,
-                            var->n_functions);
-    }
+    /* for (var = &__start___multiverse_var_; var < &__stop___multiverse_var_; var++) { */
+    /*     multiverse_os_print("  var: %s %p (width %d, tracked:%d, signed:%d), %d functions\n", */
+    /*                         var->name, */
+    /*                         var->variable_location, */
+    /*                         var->variable_width, */
+    /*                         var->flag_tracked, */
+    /*                         var->flag_signed, */
+    /*                         var->n_functions); */
+    /* } */
 }

@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
+#include <linux/bootmem.h>
 #include "multiverse.h"
 #include "mv_assert.h"
 #include "platform.h"
@@ -61,25 +62,19 @@ void multiverse_os_clear_cache(void* addr, unsigned int length) {
     __builtin___clear_cache(addr, addr+length);
 }
 
-void multiverse_os_clear_caches() { }
+void multiverse_os_clear_caches(void) { }
+
 
 void* multiverse_os_malloc(size_t size) {
-    return kmalloc(size, GFP_KERNEL);
-}
-
-
-void* multiverse_os_calloc(size_t num, size_t size) {
-    return kcalloc(num, size, GFP_KERNEL);
-}
-
-
-void multiverse_os_free(void* ptr) {
-    kfree(ptr);
-}
-
-
-void* multiverse_os_realloc(void* ptr, size_t size) {
-    return krealloc(ptr, size, GFP_KERNEL);
+    // The slab allocator is not available at boot time.  We use the early
+    // bootmem allocator in this case.  Note that memory from alloc_bootmem
+    // cannot be freed later.  This is currently no problem because Multiverse
+    // only needs dynamic memory for initialising persistent data.
+    if (slab_is_available()) {
+        return kmalloc(size, GFP_KERNEL);
+    } else {
+        return alloc_bootmem(size);
+    }
 }
 
 

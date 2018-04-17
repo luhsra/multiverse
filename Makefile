@@ -1,10 +1,4 @@
-include config.mk
-
-all: print-config gcc-plugin libmultiverse tests
-
-print-config:
-	@echo "ARCH     = ${ARCH}"
-	@echo "PLATFORM = ${PLATFORM}"
+all: gcc-plugin libmultiverse tests
 
 
 gcc-plugin libmultiverse tests:

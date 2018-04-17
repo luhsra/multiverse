@@ -36,18 +36,10 @@ void multiverse_os_clear_cache(void* addr, unsigned int length);
 /**
    @brief Clear all caches. This functionality is only required on some platforms.
 */
-void multiverse_os_clear_caches();
+void multiverse_os_clear_caches(void);
+
 
 void* multiverse_os_malloc(size_t size);
-
-
-void* multiverse_os_calloc(size_t num, size_t size);
-
-
-void multiverse_os_free(void* ptr);
-
-
-void* multiverse_os_realloc(void* ptr, size_t size);
 
 
 void multiverse_os_print(const char* fmt, ...);

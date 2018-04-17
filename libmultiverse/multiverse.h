@@ -74,6 +74,12 @@ struct mv_info_fn {
 };
 
 
+struct mv_info_fn_ref {
+    struct mv_info_fn_ref *next;
+    struct mv_info_fn *fn;
+};
+
+
 struct mv_info_callsite {
     // static
     void *function_body;
@@ -99,8 +105,7 @@ struct mv_info_var {
     };
 
     // runtime
-    unsigned int n_functions;        // Functions referening this variable
-    struct mv_info_fn **functions;
+    struct mv_info_fn_ref *functions_head; // Functions referening this variable
 };
 
 

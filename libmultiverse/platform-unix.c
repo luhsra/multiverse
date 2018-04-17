@@ -42,26 +42,11 @@ void multiverse_os_clear_cache(void* addr, unsigned int length) {
     __builtin___clear_cache(addr, addr+length);
 }
 
-void multiverse_os_clear_caches() { }
+void multiverse_os_clear_caches(void) { }
 
 
 void* multiverse_os_malloc(size_t size) {
     return malloc(size);
-}
-
-
-void* multiverse_os_calloc(size_t num, size_t size) {
-    return calloc(num, size);
-}
-
-
-void multiverse_os_free(void* ptr) {
-    free(ptr);
-}
-
-
-void* multiverse_os_realloc(void* ptr, size_t size) {
-    return realloc(ptr, size);
 }
 
 

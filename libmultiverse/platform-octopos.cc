@@ -62,16 +62,6 @@ void* multiverse_os_calloc(size_t num, size_t size) {
 }
 
 
-void multiverse_os_free(void* ptr) {
-    kfree_raw(ptr);
-}
-
-
-void* multiverse_os_realloc(void* ptr, size_t size) {
-    return krealloc_raw(ptr, size);
-}
-
-
 void multiverse_os_print(const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
