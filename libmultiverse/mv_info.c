@@ -15,10 +15,20 @@ extern struct mv_info_callsite __attribute__((weak)) __start___multiverse_callsi
 extern struct mv_info_callsite __attribute__((weak)) __stop___multiverse_callsite_;
 
 
+struct mv_info_var *__start___multiverse_var_ptr = &__start___multiverse_var_;
+struct mv_info_var *__stop___multiverse_var_ptr = &__stop___multiverse_var_;
+
+struct mv_info_fn *__start___multiverse_fn_ptr = &__start___multiverse_fn_;
+struct mv_info_fn *__stop___multiverse_fn_ptr = &__stop___multiverse_fn_;
+
+struct mv_info_callsite *__start___multiverse_callsite_ptr = &__start___multiverse_callsite_;
+struct mv_info_callsite *__stop___multiverse_callsite_ptr = &__stop___multiverse_callsite_;
+
+
 struct mv_info_var *
 multiverse_info_var(void  *variable_location) {
     struct mv_info_var *var;
-    for (var = &__start___multiverse_var_; var < &__stop___multiverse_var_; var++) {
+    for (var = __start___multiverse_var_ptr; var < __stop___multiverse_var_ptr; var++) {
         if (var->variable_location == variable_location) return var;
     }
     return NULL;
@@ -27,7 +37,7 @@ multiverse_info_var(void  *variable_location) {
 struct mv_info_fn *
 multiverse_info_fn(void  *function_body) {
     struct mv_info_fn *fn;
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+    for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
         if (fn->function_body == function_body) return fn;
     }
     return NULL;
@@ -73,7 +83,7 @@ int multiverse_init() {
 
     // Step 2: Connect all the moving parts from all compilation units
     //         and fill the runtime data.
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+    for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
         unsigned j;
 
         // First we install a patchpoint for the beginning of our function body
@@ -125,8 +135,8 @@ int multiverse_init() {
         }
     }
 
-    for (callsite = &__start___multiverse_callsite_;
-         callsite < &__stop___multiverse_callsite_; callsite++) {
+    for (callsite = __start___multiverse_callsite_ptr;
+         callsite < __stop___multiverse_callsite_ptr; callsite++) {
         struct mv_patchpoint pp;
         struct mv_info_fn *cfn = multiverse_info_fn(callsite->function_body);
 
@@ -155,7 +165,7 @@ void multiverse_dump_info(void) {
     /* multiverse_os_print("mv_info %p, version: %d", info, info->version); */
     /* multiverse_os_print(", %d functions multiversed\n", info->n_functions); */
 
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+    for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
         unsigned j;
         multiverse_os_print("  fn: %s %p, %d variants\n", /*", %d patchpoints(s)\n",*/
                             fn->name,
@@ -192,7 +202,7 @@ void multiverse_dump_info(void) {
 
     /* TDOD */
     /* multiverse_os_print("%d variables were multiversed\n", info->n_variables); */
-    /* for (var = &__start___multiverse_var_; var < &__stop___multiverse_var_; var++) { */
+    /* for (var = __start___multiverse_var_ptr; var < __stop___multiverse_var_ptr; var++) { */
     /*     multiverse_os_print("  var: %s %p (width %d, tracked:%d, signed:%d), %d functions\n", */
     /*                         var->name, */
     /*                         var->variable_location, */
