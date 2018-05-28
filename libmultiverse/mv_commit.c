@@ -7,8 +7,8 @@
 
 
 /* TODO encapsulate all this stuff in mv_info */
-extern struct mv_info_fn __start___multiverse_fn_;
-extern struct mv_info_fn __stop___multiverse_fn_;
+extern struct mv_info_fn *__start___multiverse_fn_ptr;
+extern struct mv_info_fn *__stop___multiverse_fn_ptr;
 
 
 static mv_value_t multiverse_var_read(struct mv_info_var *var) {
@@ -215,7 +215,7 @@ int multiverse_commit() {
     mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+    for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
         int r = __multiverse_commit_fn(&ctx, fn);
         if (r < 0) {
             ret = -1;
@@ -278,7 +278,7 @@ int multiverse_revert() {
     mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
-    for (fn = &__start___multiverse_fn_; fn < &__stop___multiverse_fn_; fn++) {
+    for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
         int r = multiverse_select_mvfn(&ctx, fn, NULL);
         if (r < 0) {
             r = -1;
