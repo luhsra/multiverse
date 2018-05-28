@@ -75,6 +75,8 @@ static tree build_array(Seq &elements,
 {
     auto name = std::string("__multiverse_ary_") + std::to_string(name_counter++);
     tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, types);
+    if (ary)
+        set_decl_section_name(ary, "__multiverse_data_");
 
     if (ary != NULL_TREE)
         varpool_node::finalize_decl(ary);
