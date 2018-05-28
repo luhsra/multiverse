@@ -144,6 +144,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                                            tree_cons(get_identifier("noinline"), NULL,
                                                      DECL_ATTRIBUTES(*node)));
         DECL_UNINLINABLE(*node) = 1;
+        set_decl_section_name(*node, "__multiverse_text_");
     } else if (type == POINTER_TYPE
                && (TREE_CODE(TREE_TYPE(TREE_TYPE(*node))) == FUNCTION_TYPE)) {
         // This is the third possibility how the multiverse attribute can be used.
@@ -376,6 +377,7 @@ static unsigned int multiverse_function(func_t &fn_info,
 
     fn_info.mv_functions.push_back(mvfn);
     remove_attribute("multiverse", DECL_ATTRIBUTES(cfun->decl));
+    set_decl_section_name(cfun->decl, "__multiverse_text_");
     pop_cfun();
 
     return 1;
