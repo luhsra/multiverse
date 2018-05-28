@@ -22,12 +22,11 @@
 #include <vector>
 #include <set>
 
-
 #include "gcc-common.h"
 #include "multiverse.h"
 
-#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION > 7110
-#error "Currently, the plugin supports only GCC 6 and GCC 7."
+#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION >= 9000
+#error "Currently, the plugin supports GCC 6, 7 and 8."
 #endif
 
 
@@ -173,8 +172,14 @@ static struct attribute_spec mv_attribute =
     .decl_required = true,
     .type_required = false,
     .function_type_required = false,
+#if BUILDING_GCC_VERSION >= 8000
+	.affects_type_identity = false,
+    .handler = handle_mv_attribute,
+    .exclude = nullptr,
+#else
     .handler = handle_mv_attribute,
     .affects_type_identity = false,
+#endif /* >= 8000 */
 };
 
 
