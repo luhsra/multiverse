@@ -149,20 +149,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         // This is the third possibility how the multiverse attribute can be used.
         // We ensured that the pointer is a function pointer.
         // We do nothing else here.
-        auto match = [&](func_t &f) {
-            // Don't add the function pointer more than one time.
-            // This happens when we include 'extern' declarations of multiversed
-            // function pointers.
-            auto nname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(*node));
-            auto fname = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(f.fn_decl));
-            return fname == nname;
-        };
-        auto &funcs = mv_ctx.functions;
-        if(std::find_if(funcs.begin(), funcs.end(), match) == funcs.end()) {
-            mv_ctx.functions.push_back(func_t());
-            func_t &fn_data = mv_ctx.functions.back();
-            fn_data.fn_decl = *node;
-        }
+        mv_ctx.add_func(*node);
     } else {
         error("variable %qD with %qE attribute must be an integer, boolean "
               "or enumeral type or a function pointer", *node, name);
@@ -364,7 +351,7 @@ static unsigned int multiverse_function(func_t &fn_info,
 
     for ( var_assign_t &assign : assignments) {
         // Append variable assignments to the clone's name
-        ss << "." << IDENTIFIER_POINTER(assign.variable->asm_name) << "_";
+        ss << "." << assign.variable->name() << "_";
         if (assign.label)
             ss << assign.label;
         else
@@ -380,12 +367,11 @@ static unsigned int multiverse_function(func_t &fn_info,
 
     clone_func = DECL_STRUCT_FUNCTION(clone);
     push_cfun(clone_func);
-    mvfn_t mvfn;
-    mvfn.mvfn_decl = clone; // Store declaration for clone
+    mvfn_t mvfn(clone);
     mvfn.assignments = assignments;
 
     for ( var_assign_t &assign : assignments) {
-        replace_and_constify(assign.variable->var_decl(), assign.lower_limit);
+        replace_and_constify(assign.variable->decl(), assign.lower_limit);
     }
 
     fn_info.mv_functions.push_back(mvfn);
@@ -661,9 +647,7 @@ static unsigned int mv_variant_generation_execute()
 
     // The Generator is filled with data about our variables. Let's
     // generate all variants for this function
-    mv_ctx.functions.push_back(func_t());
-    func_t &fn_data = mv_ctx.functions.back();
-    fn_data.fn_decl = cfun->decl;
+    func_t &fn_data = mv_ctx.add_func(cfun->decl);
 
     unsigned int num_clones = 0;
     generator.start();
@@ -746,7 +730,7 @@ int merge_mvfn_selectors(func_t &fn_info,
                          equivalence_class &ec)
 {
     debug_printf("\nmerge mvfn descriptors for: %s starting with %lu\n",
-                 IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)),
+                 fn_info.name(),
                  ec.size());
 
     bool changed = true;
@@ -809,12 +793,12 @@ static unsigned int mv_variant_elimination_execute()
 
     for (auto &fn_info : mv_ctx.functions) {
         debug_printf("\nmerge function bodies for: %s\n",
-                     IDENTIFIER_POINTER(DECL_NAME(fn_info.fn_decl)));
+                     fn_info.name());
 
         std::list<equivalence_class> classes;
         hash_map <symtab_node *, sem_item *> ignored_nodes;
         for (auto &mvfn_info : fn_info.mv_functions) {
-            cgraph_node *node = get_fn_cnode(mvfn_info.mvfn_decl);
+            cgraph_node *node = get_fn_cnode(mvfn_info.decl());
 #if BUILDING_GCC_MAJOR > 6 || (BUILDING_GCC_MAJOR == 6 && BUILDING_GCC_MINOR >= 3 )
             sem_function *func = new sem_function(node, &bmstack);
 #else
@@ -822,7 +806,7 @@ static unsigned int mv_variant_elimination_execute()
 #endif
             func->init();
 
-            debug_printf("%s ", IDENTIFIER_POINTER(DECL_NAME(mvfn_info.mvfn_decl)));
+            debug_printf("%s ", mvfn_info.name());
 
             bool found = false;
             for (auto &ec : classes) {
@@ -855,7 +839,7 @@ static unsigned int mv_variant_elimination_execute()
                     other_node->make_local();
 
                     // We reference the one variant that is not removed.
-                    other.first->mvfn_decl = first.first->mvfn_decl;
+                    other.first->relink_to(first.first);
                 }
                 // Merge equivalence classes of selectors
                 // Think of the following situation:

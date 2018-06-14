@@ -113,7 +113,7 @@ build_info_assignment(var_assign_t &assign_info, multiverse_info_types &types)
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR,
                                   build_pointer_type(void_type_node),
-                                  assign_info.variable->var_decl()));
+                                  assign_info.variable->decl()));
     info_fields = DECL_CHAIN(info_fields);
 
     /* lower limit */
@@ -145,7 +145,7 @@ static tree build_info_mvfn(mvfn_t &mvfn_info, multiverse_info_types &types)
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR,
                                   build_pointer_type(void_type_node),
-                                                     mvfn_info.mvfn_decl));
+                                  mvfn_info.decl()));
     info_fields = DECL_CHAIN(info_fields);
 
     /* n_assignments */
@@ -185,7 +185,7 @@ static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
     tree info_fields = TYPE_FIELDS(types.fn_type);
 
     /* Name of function */
-    const char *fn_name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(fn_info.fn_decl));
+    const char *fn_name = fn_info.name();
     size_t fn_name_len = strlen(fn_name);
     tree fn_string = build_string(fn_name_len + 1, fn_name);
 
@@ -200,7 +200,7 @@ static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
     /* Function pointer  as a (void *) */
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR, build_pointer_type(void_type_node),
-                                  fn_info.fn_decl));
+                                  fn_info.decl()));
 
     info_fields = DECL_CHAIN(info_fields);
 
@@ -236,7 +236,7 @@ static tree build_info_var(variable_t &var_info, multiverse_info_types &types)
     tree info_fields = TYPE_FIELDS(types.var_type);
 
     /* name of variable */
-    const char *var_name = IDENTIFIER_POINTER(var_info.asm_name);
+    const char *var_name = var_info.name();
     size_t var_name_len = strlen(var_name);
     tree var_string = build_string(var_name_len + 1, var_name);
 
@@ -250,11 +250,11 @@ static tree build_info_var(variable_t &var_info, multiverse_info_types &types)
     /* Pointer to variable as a (void *) */
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
                            build1(ADDR_EXPR, build_pointer_type(void_type_node),
-                                  var_info.var_decl()));
+                                  var_info.decl()));
     info_fields = DECL_CHAIN(info_fields);
 
     /* information about the variable */
-    tree type = TREE_TYPE(var_info.var_decl());
+    tree type = TREE_TYPE(var_info.decl());
     int width = int_size_in_bytes(type);
     int flag_signed = !TYPE_UNSIGNED(type);
     int flag_tracked = !!var_info.tracked;

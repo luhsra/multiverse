@@ -15,15 +15,35 @@ typedef unsigned HOST_WIDE_INT mv_value_t;
 
 
 struct multiverse_context {
-    struct variable_t {
+    struct decl_ref_t {
+    private:
         const_tree asm_name;
-        bool tracked;
-        std::set<mv_value_t> values; // Come from the attribute
+    public:
 
-        tree var_decl() {
+        decl_ref_t(tree decl)
+            : asm_name(DECL_ASSEMBLER_NAME(decl)) {}
+
+        void relink_to(decl_ref_t *other) {
+            this->asm_name = other->asm_name;
+        }
+
+        tree decl() {
             symtab_node *target = symtab_node::get_for_asmname(asm_name);
             return target->decl;
         }
+
+        const char *name() {
+            return IDENTIFIER_POINTER(asm_name);
+        }
+    };
+
+    struct variable_t : public decl_ref_t {
+        variable_t(tree decl) : decl_ref_t(decl) {}
+
+        std::set<mv_value_t> values; // Comes from the attribute
+        bool tracked;
+
+
     };
 
     struct var_assign_t {
@@ -34,32 +54,33 @@ struct multiverse_context {
 
         void dump(FILE *out) {
             fprintf(out, "%s=[%d,%d],",
-                    IDENTIFIER_POINTER(variable->asm_name),
-                    lower_limit, upper_limit);
+                    variable->name(), lower_limit, upper_limit);
         }
     };
-
     typedef std::vector<var_assign_t> var_assign_vector_t;
 
-    struct mvfn_t {
-        tree mvfn_decl;
+
+    struct mvfn_t : public decl_ref_t {
+        mvfn_t(tree decl) : decl_ref_t(decl) {}
+
         var_assign_vector_t assignments;
 
         void dump(FILE *out) {
-            fprintf(out, "mvfn:%s[", IDENTIFIER_POINTER(DECL_NAME(mvfn_decl)));
+            fprintf(out, "mvfn:%s[", this->name());
             for (auto & a : assignments) {
                 a.dump(out);
             }
         }
     };
 
-    struct func_t {
-        tree fn_decl;                    /* the function decl */
+    struct func_t : public decl_ref_t {
+        func_t(tree decl) : decl_ref_t(decl) {}
+
         std::list<mvfn_t> mv_functions;
     };
 
     struct callsite_t {
-        tree fn_decl;                    /* the function decl */
+        tree fn_decl;                    /* the callsite function decl */
         tree callsite_label;
     };
 
@@ -73,8 +94,7 @@ struct multiverse_context {
             return *x;
         }
 
-        variable_t var;
-        var.asm_name = DECL_ASSEMBLER_NAME(var_decl);
+        variable_t var(var_decl);
         var.tracked = false;
         variables.push_back(var);
         return variables.back();
@@ -84,17 +104,31 @@ struct multiverse_context {
         const_tree asm_name = DECL_ASSEMBLER_NAME(var_decl);
 
         for (auto & x : variables) {
-            if (!strcmp(IDENTIFIER_POINTER(x.asm_name),
-                        IDENTIFIER_POINTER(asm_name))) {
+            if (!strcmp(x.name(), IDENTIFIER_POINTER(asm_name))) {
                 return &x;
             }
         }
         return nullptr;
     }
 
+    func_t & add_func(tree func_decl) {
+        if (func_t * x = get_func(func_decl)) {
+            return *x;
+        }
+
+        func_t var(func_decl);
+        functions.push_back(var);
+        return functions.back();
+    }
+
+
     func_t * get_func(tree func_decl) {
+        const_tree asm_name = DECL_ASSEMBLER_NAME(func_decl);
+
         for (auto & x : functions) {
-            if (x.fn_decl == func_decl) return &x;
+            if (!strcmp(x.name(), IDENTIFIER_POINTER(asm_name))) {
+                return &x;
+            }
         }
         return nullptr;
     }
