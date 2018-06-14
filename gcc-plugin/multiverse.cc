@@ -83,8 +83,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE || type == BOOLEAN_TYPE) {
         tree var_decl = *node;
-        variable_t &var_info
-            = mv_ctx.add_variable(var_decl);
+        variable_t &var_info = mv_ctx.variables.add(var_decl);
 
         location_t loc = DECL_SOURCE_LOCATION(*node);
         for (tree p = args; p; p = TREE_CHAIN(p)) {
@@ -149,7 +148,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
         // This is the third possibility how the multiverse attribute can be used.
         // We ensured that the pointer is a function pointer.
         // We do nothing else here.
-        mv_ctx.add_func(*node);
+        mv_ctx.functions.add(*node);
     } else {
         error("variable %qD with %qE attribute must be an integer, boolean "
               "or enumeral type or a function pointer", *node, name);
@@ -598,8 +597,7 @@ static unsigned int mv_variant_generation_execute()
         auto &variable = item.first;
         auto &hints = item.second;
 
-        variable_t *var_info =
-            mv_ctx.get_variable(variable);
+        variable_t *var_info = mv_ctx.variables.get(variable);
 
         assert (var_info != nullptr && "We should always find these variables");
 
@@ -647,7 +645,7 @@ static unsigned int mv_variant_generation_execute()
 
     // The Generator is filled with data about our variables. Let's
     // generate all variants for this function
-    func_t &fn_data = mv_ctx.add_func(cfun->decl);
+    func_t &fn_data = mv_ctx.functions.add(cfun->decl);
 
     unsigned int num_clones = 0;
     generator.start();

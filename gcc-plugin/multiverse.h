@@ -15,6 +15,14 @@ typedef unsigned HOST_WIDE_INT mv_value_t;
 
 
 struct multiverse_context {
+    /* \brief reference to a named declaration
+
+       We use this wrapper class to have a stable reference to a named
+       GCC tree object. Due to optimizations and different phases in
+       the compiler, tree references can become invalid. Therefore, we
+       reference into the internal GCC structures by saving the
+       assembler name.
+    */
     struct decl_ref_t {
     private:
         const_tree asm_name;
@@ -25,6 +33,11 @@ struct multiverse_context {
 
         void relink_to(decl_ref_t *other) {
             this->asm_name = other->asm_name;
+        }
+
+        bool is_ref_to(tree decl) {
+            return !strcmp(this->name(),
+                           IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(decl)));
         }
 
         tree decl() {
@@ -38,7 +51,7 @@ struct multiverse_context {
     };
 
     struct variable_t : public decl_ref_t {
-        variable_t(tree decl) : decl_ref_t(decl) {}
+        variable_t(tree decl) : decl_ref_t(decl), tracked(false) {}
 
         std::set<mv_value_t> values; // Comes from the attribute
         bool tracked;
@@ -84,55 +97,31 @@ struct multiverse_context {
         tree callsite_label;
     };
 
-    // information
-    std::list<func_t> functions;
+
+
+    template<class T>
+    struct decl_ref_container : public std::list<T> {
+        T& add(tree decl) {
+            if (T * x = get(decl)) return *x;
+            this->emplace_back(decl);
+            return this->back();
+        }
+
+        T* get(tree decl) {
+            for (auto & x : *this) {
+                if (x.is_ref_to(decl)) {
+                    return &x;
+                }
+            }
+            return nullptr;
+        }
+    };
+
+
+    // Data Members below:
     std::list<callsite_t> callsites;
-    std::list<variable_t> variables;
-
-    variable_t & add_variable(tree var_decl) {
-        if (variable_t * x = get_variable(var_decl)) {
-            return *x;
-        }
-
-        variable_t var(var_decl);
-        var.tracked = false;
-        variables.push_back(var);
-        return variables.back();
-    }
-
-    variable_t * get_variable(tree var_decl) {
-        const_tree asm_name = DECL_ASSEMBLER_NAME(var_decl);
-
-        for (auto & x : variables) {
-            if (!strcmp(x.name(), IDENTIFIER_POINTER(asm_name))) {
-                return &x;
-            }
-        }
-        return nullptr;
-    }
-
-    func_t & add_func(tree func_decl) {
-        if (func_t * x = get_func(func_decl)) {
-            return *x;
-        }
-
-        func_t var(func_decl);
-        functions.push_back(var);
-        return functions.back();
-    }
-
-
-    func_t * get_func(tree func_decl) {
-        const_tree asm_name = DECL_ASSEMBLER_NAME(func_decl);
-
-        for (auto & x : functions) {
-            if (!strcmp(x.name(), IDENTIFIER_POINTER(asm_name))) {
-                return &x;
-            }
-        }
-        return nullptr;
-    }
-
+    decl_ref_container<func_t> functions;
+    decl_ref_container<variable_t> variables;
 };
 
 

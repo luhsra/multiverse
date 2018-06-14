@@ -47,7 +47,7 @@ int main(int argc, char **argv)
     multiverse_init();
 
 
-    // multiverse_dump_info();
+    //multiverse_dump_info();
 
     // All three functions should be equal
     assert(body_count(&func_1) == 4);
