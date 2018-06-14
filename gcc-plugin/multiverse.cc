@@ -79,6 +79,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
 {
     (void) flags;
     (void) no_add_attrs;
+
     int type = TREE_CODE(TREE_TYPE(*node));
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE || type == BOOLEAN_TYPE) {

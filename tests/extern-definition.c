@@ -14,6 +14,11 @@ typedef enum {true, false} bool;
 
 #define M __attribute__((multiverse))
 
+extern M bool unused;
+extern M void unused_func();
+
+
+
 extern M bool config_1;
 bool M config_1;
 

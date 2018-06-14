@@ -39,6 +39,9 @@ static tree get_array_decl(const char *name,
     vec<constructor_elt, va_gc> *ary_ctor = NULL;
     for (auto &data : elements) {
         tree obj = build_obj(data, types);
+        // The generator has decided to not emit a descriptor for this element
+        if (obj == NULL_TREE)
+            continue;
         CONSTRUCTOR_APPEND_ELT(ary_ctor, NULL, obj);
     }
 
@@ -234,6 +237,11 @@ static tree build_info_var(variable_t &var_info, multiverse_info_types &types)
 {
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(types.var_type);
+
+    /* When a variable is defined only as extern, we ignore it */
+    if (var_info.decl() == NULL_TREE) {
+        return NULL_TREE;
+    }
 
     /* name of variable */
     const char *var_name = var_info.name();

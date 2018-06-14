@@ -42,6 +42,8 @@ struct multiverse_context {
 
         tree decl() {
             symtab_node *target = symtab_node::get_for_asmname(asm_name);
+            if (target == NULL)
+                return NULL_TREE;
             return target->decl;
         }
 
