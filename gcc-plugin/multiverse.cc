@@ -364,7 +364,7 @@ static unsigned int multiverse_function(func_t &fn_info,
 
     for ( var_assign_t &assign : assignments) {
         // Append variable assignments to the clone's name
-        ss << "." << IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(assign.variable->var_decl)) << "_";
+        ss << "." << IDENTIFIER_POINTER(assign.variable->asm_name) << "_";
         if (assign.label)
             ss << assign.label;
         else
@@ -385,7 +385,7 @@ static unsigned int multiverse_function(func_t &fn_info,
     mvfn.assignments = assignments;
 
     for ( var_assign_t &assign : assignments) {
-        replace_and_constify(assign.variable->var_decl, assign.lower_limit);
+        replace_and_constify(assign.variable->var_decl(), assign.lower_limit);
     }
 
     fn_info.mv_functions.push_back(mvfn);
@@ -615,6 +615,8 @@ static unsigned int mv_variant_generation_execute()
         variable_t *var_info =
             mv_ctx.get_variable(variable);
 
+        assert (var_info != nullptr && "We should always find these variables");
+
         // We reference the variable in this function. Therefore, we
         // add it to the current variant generator instance.
         generator.add_variable(var_info);
@@ -706,7 +708,7 @@ merge_if_possible(std::vector<var_assign_t> &a,
     for (unsigned i = 0; i < a.size() ; i++) {
         // If two assignments have not exactly the same variable
         // order, we cannot compare them.
-        if (a[i].variable->var_decl != b[i].variable->var_decl)
+        if (a[i].variable != b[i].variable)
             return false;
         if (a[i].lower_limit == b[i].lower_limit
             && a[i].upper_limit == b[i].upper_limit)

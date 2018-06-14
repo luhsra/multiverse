@@ -37,33 +37,6 @@ int __attribute((multiverse)) xor()
 }
 
 
-int desc_count(void *function) {
-    struct mv_info_fn *fn = multiverse_info_fn(function);
-    assert(fn);
-    return fn->n_mv_functions;
-}
-
-
-int body_count(void *function) {
-    struct mv_info_fn *fn = multiverse_info_fn(function);
-    assert(fn);
-    void *bodies[fn->n_mv_functions];
-    for (unsigned i = 0; i < fn->n_mv_functions; i++) {
-        bodies[i] = fn->mv_functions[i].function_body;
-    }
-    int count = 0;
-    for (unsigned i = 0; i < fn->n_mv_functions; i++) {
-        if (!bodies[i]) continue;
-        count ++;
-        void *body = bodies[i];
-        for (unsigned j = i; j < fn->n_mv_functions; j++) {
-            if (bodies[j] == body)
-                bodies[j] = NULL;
-        }
-    }
-    return count;
-}
-
 
 int main(int argc, char **argv)
 {

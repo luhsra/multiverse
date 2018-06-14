@@ -16,9 +16,14 @@ typedef unsigned HOST_WIDE_INT mv_value_t;
 
 struct multiverse_context {
     struct variable_t {
-        tree var_decl;
+        const_tree asm_name;
         bool tracked;
         std::set<mv_value_t> values; // Come from the attribute
+
+        tree var_decl() {
+            symtab_node *target = symtab_node::get_for_asmname(asm_name);
+            return target->decl;
+        }
     };
 
     struct var_assign_t {
@@ -26,6 +31,12 @@ struct multiverse_context {
         const char * label;
         unsigned lower_limit;
         unsigned upper_limit;
+
+        void dump(FILE *out) {
+            fprintf(out, "%s=[%d,%d],",
+                    IDENTIFIER_POINTER(variable->asm_name),
+                    lower_limit, upper_limit);
+        }
     };
 
     typedef std::vector<var_assign_t> var_assign_vector_t;
@@ -37,10 +48,7 @@ struct multiverse_context {
         void dump(FILE *out) {
             fprintf(out, "mvfn:%s[", IDENTIFIER_POINTER(DECL_NAME(mvfn_decl)));
             for (auto & a : assignments) {
-                fprintf(out, "%s=[%d,%d],",
-                        IDENTIFIER_POINTER(DECL_NAME(a.variable->var_decl)),
-                        a.lower_limit, a.upper_limit);
-
+                a.dump(out);
             }
         }
     };
@@ -60,17 +68,26 @@ struct multiverse_context {
     std::list<callsite_t> callsites;
     std::list<variable_t> variables;
 
-    variable_t & add_variable(tree variable) {
+    variable_t & add_variable(tree var_decl) {
+        if (variable_t * x = get_variable(var_decl)) {
+            return *x;
+        }
+
         variable_t var;
-        var.var_decl = variable;
+        var.asm_name = DECL_ASSEMBLER_NAME(var_decl);
         var.tracked = false;
         variables.push_back(var);
         return variables.back();
     }
 
     variable_t * get_variable(tree var_decl) {
+        const_tree asm_name = DECL_ASSEMBLER_NAME(var_decl);
+
         for (auto & x : variables) {
-            if (x.var_decl == var_decl) return &x;
+            if (!strcmp(IDENTIFIER_POINTER(x.asm_name),
+                        IDENTIFIER_POINTER(asm_name))) {
+                return &x;
+            }
         }
         return nullptr;
     }
