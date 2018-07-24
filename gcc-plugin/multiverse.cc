@@ -862,9 +862,23 @@ static unsigned int mv_variant_elimination_execute()
 }
 
 
+static bool mv_variant_elimination_gate() {
+    // The elimination pass relies on the static variable `optimizer` in
+    // `ipa-icf.c` to be initialized (super hacky).  This is the case only when
+    // the IPA-ICF pass is executed.
+    return g->get_passes()->get_pass_by_name("ipa-icf")->gate(NULL);
+}
+
 #define PASS_NAME mv_variant_elimination
-#define NO_GATE
-#include "gcc-generate-simple_ipa-pass.h"
+#define NO_GENERATE_SUMMARY
+#define NO_READ_SUMMARY
+#define NO_WRITE_SUMMARY
+#define NO_READ_OPTIMIZATION_SUMMARY
+#define NO_WRITE_OPTIMIZATION_SUMMARY
+#define NO_STMT_FIXUP
+#define NO_FUNCTION_TRANSFORM
+#define NO_VARIABLE_TRANSFORM
+#include "gcc-generate-ipa-pass.h"
 
 /*
  * Pass to find call instructions in the RTL that reference a multiverse
@@ -960,9 +974,9 @@ int plugin_init(struct plugin_name_args *info, struct plugin_gcc_version *versio
 
     // Register pass: eliminate duplicated variants
     mv_variant_elimination_info.pass = make_mv_variant_elimination_pass();
-    mv_variant_elimination_info.reference_pass_name = "opt_local_passes";
+    mv_variant_elimination_info.reference_pass_name = "icf";
     mv_variant_elimination_info.ref_pass_instance_number = 0;
-    mv_variant_elimination_info.pos_op = PASS_POS_INSERT_AFTER; // AFTER => more optimized code
+    mv_variant_elimination_info.pos_op = PASS_POS_INSERT_BEFORE;
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &mv_variant_elimination_info);
 
     // Register the multiverse RTL pass which adds labels to callsites
