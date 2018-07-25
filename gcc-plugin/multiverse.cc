@@ -862,11 +862,32 @@ static unsigned int mv_variant_elimination_execute()
 }
 
 
+static opt_pass *find_icf_pass(opt_pass *ipa_passes) {
+    opt_pass *pass = ipa_passes;
+    while (pass != NULL) {
+        if (strcmp(pass->name, "icf") == 0) {
+            return pass;
+        }
+        if (pass->sub != NULL) {
+            opt_pass *found = find_icf_pass(pass->sub);
+            if (found != NULL)
+                return found;
+        }
+        pass = pass->next;
+    }
+    return NULL;
+}
+
 static bool mv_variant_elimination_gate() {
     // The elimination pass relies on the static variable `optimizer` in
     // `ipa-icf.c` to be initialized (super hacky).  This is the case only when
     // the IPA-ICF pass is executed.
+    #if BUILDING_GCC_VERSION >= 7000
     return g->get_passes()->get_pass_by_name("ipa-icf")->gate(NULL);
+    #else
+    opt_pass *icf_pass = find_icf_pass(g->get_passes()->all_regular_ipa_passes);
+    return icf_pass->gate(NULL);
+    #endif
 }
 
 #define PASS_NAME mv_variant_elimination
