@@ -173,7 +173,7 @@ static struct attribute_spec mv_attribute =
     .type_required = false,
     .function_type_required = false,
 #if BUILDING_GCC_VERSION >= 8000
-	.affects_type_identity = false,
+    .affects_type_identity = false,
     .handler = handle_mv_attribute,
     .exclude = nullptr,
 #else
@@ -289,6 +289,7 @@ static tree clone_fndecl(tree fndecl, std::string fname)
     clone->alias = node->alias;
     clone->weakref = node->weakref;
     clone->cpp_implicit_alias = node->cpp_implicit_alias;
+    clone->force_output = 1;
 
     if (gimple_has_body_p(fndecl)) {
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
