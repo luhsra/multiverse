@@ -83,6 +83,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
     // FIXME: Error on weak attributed variables?
     if (type == INTEGER_TYPE || type == ENUMERAL_TYPE || type == BOOLEAN_TYPE) {
         tree var_decl = *node;
+        DECL_PRESERVE_P(var_decl) = 1;
         variable_t &var_info = mv_ctx.variables.add(var_decl);
 
         location_t loc = DECL_SOURCE_LOCATION(*node);
