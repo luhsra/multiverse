@@ -23,7 +23,7 @@ extern M bool config_1;
 bool M config_1;
 
 extern M bool config_2;
-bool config_2;
+bool M config_2;
 
 extern bool config_3;
 bool M config_3;

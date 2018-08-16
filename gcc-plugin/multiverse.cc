@@ -125,6 +125,7 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                     }
                 }
                 if (arg == "values") {
+                    // TODO: A warning should be generated if we have different values in decls.
                     var_info.values.insert(values.begin(), values.end());
                 } else {
                 invalid_argument:

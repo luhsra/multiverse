@@ -32,10 +32,7 @@ static tree get_array_decl(const char *name,
                            tree (*build_obj)(T&, multiverse_info_types&),
                            multiverse_info_types &types)
 {
-    // TODO: some of them may be TYPE_QUAL_CONST
-    tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_UNQUALIFIED),
-                                     build_index_type(size_int(elements.size()-1)));
-
+    unsigned int ary_size = 0;
     vec<constructor_elt, va_gc> *ary_ctor = NULL;
     for (auto &data : elements) {
         tree obj = build_obj(data, types);
@@ -43,7 +40,15 @@ static tree get_array_decl(const char *name,
         if (obj == NULL_TREE)
             continue;
         CONSTRUCTOR_APPEND_ELT(ary_ctor, NULL, obj);
+        ary_size++;
     }
+
+    if (ary_size == 0)
+        return NULL_TREE;
+
+    // TODO: some of them may be TYPE_QUAL_CONST
+    tree ary_type = build_array_type(build_qualified_type(element_type, TYPE_UNQUALIFIED),
+                                     build_index_type(size_int(ary_size-1)));
 
     tree ary = build_decl(BUILTINS_LOCATION, VAR_DECL, NULL_TREE, ary_type);
     SET_DECL_ASSEMBLER_NAME(ary, get_identifier(name));
@@ -71,7 +76,8 @@ static tree build_array(Seq &elements,
     auto name = std::string("__multiverse_ary_") + std::to_string(name_counter++);
     tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, types);
 
-    varpool_node::finalize_decl(ary);
+    if (ary != NULL_TREE)
+        varpool_node::finalize_decl(ary);
     return ary;
 }
 
@@ -88,20 +94,20 @@ static void build_section_array(const char *section_name,
                                 multiverse_info_types& types) {
     // Only create the array if necessary (and thus the special section for this
     // compilation unit).
-    if (elements.size() == 0)
-        return;
 
     auto name = std::string(section_name) + "ary_";
     tree ary = get_array_decl(name.c_str(), elements, element_type, build_obj, types);
 
-    // Set the smallest possible alignment.  The sections of all compilation
-    // units will be merged during linking and will be accessed as a single
-    // array by the multiverse runtime library.
-    SET_DECL_ALIGN(ary, 0);
-    DECL_USER_ALIGN(ary) = 1;
-    set_decl_section_name(ary, section_name);
+    if (ary != NULL_TREE) {
+        // Set the smallest possible alignment.  The sections of all compilation
+        // units will be merged during linking and will be accessed as a single
+        // array by the multiverse runtime library.
+        SET_DECL_ALIGN(ary, 0);
+        DECL_USER_ALIGN(ary) = 1;
+        set_decl_section_name(ary, section_name);
 
-    varpool_node::finalize_decl(ary);
+        varpool_node::finalize_decl(ary);
+    }
 }
 
 
@@ -160,8 +166,10 @@ static tree build_info_mvfn(mvfn_t &mvfn_info, multiverse_info_types &types)
     /* mv_assignments */
     tree assigns_ary = build_array(mvfn_info.assignments, types.assignment_type,
                                    build_info_assignment, types);
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, types.assignment_ptr_type, assigns_ary));
+    if (assigns_ary != NULL_TREE)
+        CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                               build1(ADDR_EXPR, types.assignment_ptr_type,
+                                      assigns_ary));
 
     info_fields = DECL_CHAIN(info_fields);
 
@@ -183,6 +191,11 @@ static tree build_info_mvfn(mvfn_t &mvfn_info, multiverse_info_types &types)
 
 static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
 {
+    /* When a function is defined only as extern, we ignore it */
+    if (!fn_info.is_definition) {
+        return NULL_TREE;
+    }
+
     /* Create the constructor for the top-level mv_info object */
     vec<constructor_elt, va_gc> *obj = NULL;
     tree info_fields = TYPE_FIELDS(types.fn_type);
@@ -217,8 +230,9 @@ static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
     /* mv_functions -- */
     tree mvfn_ary = build_array(fn_info.mv_functions, types.mvfn_ptr_type,
                                 build_info_mvfn, types);
-    CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build1(ADDR_EXPR, types.mvfn_ptr_type, mvfn_ary));
+    if (mvfn_ary != NULL_TREE)
+        CONSTRUCTOR_APPEND_ELT(obj, info_fields,
+                               build1(ADDR_EXPR, types.mvfn_ptr_type, mvfn_ary));
     info_fields = DECL_CHAIN(info_fields);
 
     /* Fields initialized by the runtime system */
@@ -235,13 +249,13 @@ static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
 
 static tree build_info_var(variable_t &var_info, multiverse_info_types &types)
 {
-    vec<constructor_elt, va_gc> *obj = NULL;
-    tree info_fields = TYPE_FIELDS(types.var_type);
-
     /* When a variable is defined only as extern, we ignore it */
-    if (var_info.decl() == NULL_TREE) {
+    if (!var_info.is_definition) {
         return NULL_TREE;
     }
+
+    vec<constructor_elt, va_gc> *obj = NULL;
+    tree info_fields = TYPE_FIELDS(types.var_type);
 
     /* name of variable */
     const char *var_name = var_info.name();

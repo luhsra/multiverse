@@ -27,9 +27,11 @@ struct multiverse_context {
     private:
         const_tree asm_name;
     public:
+        bool is_definition;
 
         decl_ref_t(tree decl)
-            : asm_name(DECL_ASSEMBLER_NAME(decl)) {}
+            : asm_name(DECL_ASSEMBLER_NAME(decl)),
+              is_definition(!DECL_EXTERNAL(decl)) {}
 
         void relink_to(decl_ref_t *other) {
             this->asm_name = other->asm_name;
@@ -104,9 +106,13 @@ struct multiverse_context {
     template<class T>
     struct decl_ref_container : public std::list<T> {
         T& add(tree decl) {
-            if (T * x = get(decl)) return *x;
-            this->emplace_back(decl);
-            return this->back();
+            T * x = get(decl);
+            if (x == nullptr) {
+                this->emplace_back(decl);
+                x = &this->back();
+            }
+            x->is_definition = x->is_definition || !DECL_EXTERNAL(decl);
+            return *x;
         }
 
         T* get(tree decl) {
