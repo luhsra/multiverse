@@ -36,7 +36,20 @@ void multiverse_arch_decode_callsite(struct mv_info_fn *fn,
     info->type = PP_TYPE_INVALID;
 }
 
-static int is_ret(char *addr) {
+static int uses_frame_pointer(char *addr) {
+    // 55:        push %rbp
+    // 48 89 e5:  mov %rsp,%rbp
+    return (memcmp(addr, "\x55\x48\x89\xe5", 4) == 0);
+}
+
+static int is_ret(char *addr, int with_frame_pointer) {
+    if (with_frame_pointer) {
+        // 5d: pop %rbp
+        if (memcmp(addr, "\x5d", 1) == 0)
+            addr += 1;
+        else
+            return 0;
+    }
     //    c3: retq
     // f3 c3: repz retq
     return (memcmp(addr, "\xc3", 1) == 0)
@@ -53,22 +66,25 @@ static int location_len(mv_info_patchpoint_type type) {
 
 void multiverse_arch_decode_mvfn_body(struct mv_info_mvfn *info) {
     char *op = info->function_body;
-    // 31 c0: xor    %eax,%eax
-    //    c3: retq
-    if (memcmp(op, "\x31\xc0", 2) == 0 && is_ret(op + 2)) {
+    int with_frame_pointer = uses_frame_pointer(op);
+    if (with_frame_pointer)
+        op += 4;
+
+    if (memcmp(op, "\x31\xc0", 2) == 0 && is_ret(op + 2, with_frame_pointer)) {
+        // 31 c0: xor    %eax,%eax
         // multiverse_os_print("eax = 0\n");
         info->type = MVFN_TYPE_CONSTANT;
         info->constant = 0;
-    } else if (memcmp(op, "\xb8", 1) == 0 && is_ret(op + 5)) {
+    } else if (memcmp(op, "\xb8", 1) == 0 && is_ret(op + 5, with_frame_pointer)) {
         info->type = MVFN_TYPE_CONSTANT;
         info->constant = *(uint32_t *)(op +1);
         // multiverse_os_print("eax = %d\n", info->constant);
-    } else if (is_ret(info->function_body)) {
+    } else if (is_ret(op, with_frame_pointer)) {
         // multiverse_os_print("NOP\n");
         info->type = MVFN_TYPE_NOP;
-    } else if (memcmp(op, "\xfa", 1) == 0 && is_ret(op + 1)) {
+    } else if (memcmp(op, "\xfa", 1) == 0 && is_ret(op + 1, with_frame_pointer)) {
         info->type = MVFN_TYPE_CLI;
-    } else if (memcmp(op, "\xfb", 1) == 0 && is_ret(op + 1)) {
+    } else if (memcmp(op, "\xfb", 1) == 0 && is_ret(op + 1, with_frame_pointer)) {
         info->type = MVFN_TYPE_STI;
     } else {
         info->type = MVFN_TYPE_NONE;
