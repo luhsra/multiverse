@@ -5,6 +5,7 @@ includedir=${prefix}/include
 
 Name: libmultiverse
 Description: Function Multiverse compiler assisted function multiversing
+Version: 0.1
 
 Libs: -L${libdir} -lmultiverse
 Cflags: -I${includedir} -fplugin=multiverse
