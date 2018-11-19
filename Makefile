@@ -12,6 +12,19 @@ clean:
 test:
 	$(MAKE) -C tests test
 
+GCCPLUGINS_DIR:= $(shell $(CXX) -print-file-name=plugin)
+
+.PHONY: install
+install:
+	cp libmultiverse.pc $(DESTDIR)/usr/lib/pkgconfig/libmultiverse.pc
+	$(MAKE) -C gcc-plugin install
+	$(MAKE) -C libmultiverse install
+
+.PHONY: uninstall
+uninstall:
+	$(MAKE) -C gcc-plugin uninstall
+	$(MAKE) -C libmultiverse uninstall
+	rm -f $(DESTDIR)/usr/lib/pkgconfig/libmultiverse.pc
 
 # Docker rules for build testing
 PWD=$(shell pwd)

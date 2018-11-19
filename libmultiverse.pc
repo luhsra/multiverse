@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libmultiverse
+Description: Function Multiverse compiler assisted function multiversing
+
+Libs: -L${libdir} -lmultiverse
+Cflags: -I${includedir} -fplugin=multiverse

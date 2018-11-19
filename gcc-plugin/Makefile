@@ -22,4 +22,11 @@ include common.mk
 multiverse.so: $(OBJECTS)
 	$(CXX) -shared $(CXXFLAGS) $^ -o $@
 
-.PHONY = all clean
+install: multiverse.so 
+	mkdir -p $(DESTDIR)$(GCCPLUGINS_DIR)/
+	cp multiverse.so $(DESTDIR)$(GCCPLUGINS_DIR)/
+
+uninstall:
+	rm -f $(DESTDIR)$(GCCPLUGINS_DIR)/multiverse.so
+
+.PHONY = all clean install uninstall
