@@ -42,7 +42,7 @@ The paradigm of __function multiverse__ is that everything *must* be made explic
 First, we need to let the compiler know *which functions* should be multiversed with *which variables*.
 In terms of GCC, this means we have to attribute functions and variables with `__attribute__((multiverse))` when they are declared.
 Second, the moment at which the current functionality is captured is explicit.
-After a variable has changed, the developer commits one or more functions (e.g., via `multiverse_commit_fn()` or `multiverse_commit_refs()'):
+After a variable has changed, the developer commits one or more functions (e.g., via `multiverse_commit_fn()` or `multiverse_commit_refs()`):
 the run-time system captures the referenced multiverse variables, decides which variant fits best, and nails down the functionality.
 
 The code below is an example of how multiverse can be used:
@@ -97,13 +97,37 @@ void foo_config_A_false()
 }
 ```
 
+Another use case of multiverse is the replacement of indirect calls to a function pointer by direct calls to its currently assigned function. Therefore function pointers can also be attributed with `__attribute__((multiverse))`. In this case multiverse does not perform variant generation. Instead, variants are provided manually by the programmer when assigning values to the function pointer. Like above the run-time patching must be performed via an explicit commit call.
+
+```c
+__attribute__((multiverse)) int (*my_fn_ptr)(void);
+
+int foo(void) {
+    return do_someting();
+}
+
+int main()
+{
+    fp = foo;
+    // Any function that matches my_fn_ptr's signature can be assigned to it
+
+    // The function pointer my_fn_ptr is comitted
+    multiverse_commit_fn(&my_fn_ptr);
+
+    my_fn_ptr()
+
+    return 0;
+}
+```
+
 ## What Can Be Multiversed?
 * __Variables__
   * __Enumeral Types__: For every value of the enum, we generate one multiverse variant.
   * __Integer Types__: Integer types are a bit more complex, since their domain is much larger in general ([0, INT_MAX]). Therefore, we guess useful assignments from referencing function bodies. If we find no comparision with a constant (config_A == 3), we fall back to specializing it to `0` and `1`
 * __Functions__
   * In general, all functions can be attributed with multiverse. Nevertheless, multiverse functions are not inlined anymore.
-
+* __Function Pointers__
+  * Function pointers can be also be attributed with multiverse. Unlike functions, there is no variant generation. The compiler plugin only records the function-pointer call sites in order to give the run-time library the capability to replace the indirect calls with direct calls.
 
 ## How Does Function Multiverse Work?
 Function multiverse is implemented as a GCC plugin, which adds several passes to the middle-end and back-end of the compiler.
@@ -151,3 +175,5 @@ To build the plugin you need the following packages:
   * gcc-devel
 
 After having built the plugin with `make` you can use it via `gcc -fplugin=multiverse.so`.
+
+You can install multiverse (compiler plugin & run-time library) with `make install`. Note that the compiler plugin always gets installed in the plugin directory reported by GCC regardless of the current $PREFIX (however, $DESTDIR is obeyed).
