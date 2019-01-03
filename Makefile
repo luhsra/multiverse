@@ -16,6 +16,7 @@ GCCPLUGINS_DIR:= $(shell $(CXX) -print-file-name=plugin)
 
 .PHONY: install
 install:
+	mkdir -p $(DESTDIR)/usr/lib/pkgconfig/
 	cp libmultiverse.pc $(DESTDIR)/usr/lib/pkgconfig/libmultiverse.pc
 	$(MAKE) -C gcc-plugin install
 	$(MAKE) -C libmultiverse install
