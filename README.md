@@ -108,7 +108,7 @@ int foo(void) {
 
 int main()
 {
-    fp = foo;
+    my_fn_ptr = foo;
     // Any function that matches my_fn_ptr's signature can be assigned to it
 
     // The function pointer my_fn_ptr is comitted
