@@ -223,9 +223,9 @@ static tree build_info_fn(func_t &fn_info, multiverse_info_types &types)
     info_fields = DECL_CHAIN(info_fields);
 
     /* n_mv_functions */
-    unsigned n_mv_functions = fn_info.mv_functions.size();
+    int n_mv_functions = (fn_info.function_pointer) ? -1 : fn_info.mv_functions.size();
     CONSTRUCTOR_APPEND_ELT(obj, info_fields,
-                           build_int_cstu(TREE_TYPE(info_fields), n_mv_functions));
+                           build_int_cst(TREE_TYPE(info_fields), n_mv_functions));
 
     info_fields = DECL_CHAIN(info_fields);
 

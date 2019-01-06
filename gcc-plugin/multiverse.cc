@@ -149,8 +149,8 @@ static tree handle_mv_attribute(tree *node, tree name, tree args, int flags,
                && (TREE_CODE(TREE_TYPE(TREE_TYPE(*node))) == FUNCTION_TYPE)) {
         // This is the third possibility how the multiverse attribute can be used.
         // We ensured that the pointer is a function pointer.
-        // We do nothing else here.
-        mv_ctx.functions.add(*node);
+        func_t &func = mv_ctx.functions.add(*node);
+        func.function_pointer = true;
     } else {
         error("variable %qD with %qE attribute must be an integer, boolean "
               "or enumeral type or a function pointer", *node, name);

@@ -84,23 +84,23 @@ int multiverse_init() {
     // Step 2: Connect all the moving parts from all compilation units
     //         and fill the runtime data.
     for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
-        unsigned j;
+        int k;
 
         // First we install a patchpoint for the beginning of our function body
         struct mv_patchpoint pp;
         multiverse_arch_decode_function(fn, &pp);
         if (pp.type == PP_TYPE_INVALID) continue;
 
-        if (fn->n_mv_functions > 0) {
+        if (fn->n_mv_functions != -1) {
             // Only append "self" patchpoint if fn describes a function and
             // not a function pointer
             mv_info_fn_patchpoint_append(fn, pp);
         }
 
-        for (j = 0; j < fn->n_mv_functions; j++) {
+        for (k = 0; k < fn->n_mv_functions; k++) {
             unsigned x;
 
-            struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
+            struct mv_info_mvfn * mvfn = &fn->mv_functions[k];
             // Let's see if we can extract further information
             // for our multiverse function, like: constant return value.
             multiverse_arch_decode_mvfn_body(mvfn);
@@ -166,15 +166,15 @@ void multiverse_dump_info(void) {
     /* multiverse_os_print(", %d functions multiversed\n", info->n_functions); */
 
     for (fn = __start___multiverse_fn_ptr; fn < __stop___multiverse_fn_ptr; fn++) {
-        unsigned j;
+        int k;
         multiverse_os_print("  fn: %s %p, %d variants\n", /*", %d patchpoints(s)\n",*/
                             fn->name,
                             fn->function_body,
                             fn->n_mv_functions
                             /*fn->extra->n_patchpoints*/);
-        for (j = 0; j < fn->n_mv_functions; j++) {
+        for (k = 0; k < fn->n_mv_functions; k++) {
             unsigned x;
-            struct mv_info_mvfn * mvfn = &fn->mv_functions[j];
+            struct mv_info_mvfn * mvfn = &fn->mv_functions[k];
             // Execute function mv_func();
             multiverse_os_print("    mvfn: %p (vars %d)",
                                 mvfn->function_body, mvfn->n_assignments);

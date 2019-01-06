@@ -32,6 +32,8 @@ int main(int argc, char **argv)
 
     fp = foo2;
     multiverse_commit_fn(&fp);
+    fp = foo1;
+    asm volatile ("nop\n":::"memory");
     assert(fp() == 42);
 
     return 0;

@@ -63,10 +63,14 @@ struct mv_info_mvfn {
 
 struct mv_info_fn {
     // static
-    char *const name;                // Functions's symbol name
-    void *function_body;             // A pointer to the original (generic) function body
-    unsigned int n_mv_functions;     // Specialized multiverse variant functions of this function
+    char *const name;       // Functions's symbol name
+    void *function_body;    // A pointer to the original (generic) function body
+    int n_mv_functions;     // Specialized multiverse variant functions of this function
     struct mv_info_mvfn *mv_functions;
+    // In case that the mv_info_fn represents a multiversed function pointer
+    // (instead of a multiversed function) the field n_mv_functions is set to -1.
+    // In this case mv_functions points to a single mvfn descriptor that is
+    // temporarily used for each function that is assigned to the function pointer.
 
     // runtime
     struct mv_patchpoint *patchpoints_head;  // Patchpoints as linked list TODO: arch-specific

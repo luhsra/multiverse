@@ -23,7 +23,7 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
         char * const const name;
         void * original_function;
 
-        unsigned int n_mv_functions;
+        int n_mv_functions;
         struct mv_info_mvfn ** mv_functions;
 
         struct mv_patchpoint * patchpoints_head;
@@ -40,7 +40,7 @@ static void build_info_fn_type(tree info_fn_type, tree info_mvfn_ptr_type)
     RECORD_FIELD(build_pointer_type(void_type_node));
 
     /* n_mv_functions */
-    RECORD_FIELD(get_mv_unsigned_t());
+    RECORD_FIELD(integer_type_node);
 
     /* mv_functions pointer */
     RECORD_FIELD(build_qualified_type(info_mvfn_ptr_type, TYPE_QUAL_CONST));
@@ -136,7 +136,7 @@ static void build_info_mvfn_type(tree info_mvfn_type, tree info_assignment_ptr_t
     RECORD_FIELD(build_pointer_type(void_type_node));
 
     /* n_assignments */
-    RECORD_FIELD(get_mv_unsigned_t());
+    RECORD_FIELD(integer_type_node);
 
     /* mv_assignments pointer */
     RECORD_FIELD(build_qualified_type(info_assignment_ptr_type, TYPE_QUAL_CONST));

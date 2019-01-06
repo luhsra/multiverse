@@ -116,10 +116,10 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
 
 static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
     int ret;
-    if (fn->n_mv_functions > 0) {
+    if (fn->n_mv_functions != -1) {
         // A normal multiverse function
         struct mv_info_mvfn *best_mvfn = NULL;
-        unsigned f;
+        int f;
         for (f = 0; f < fn->n_mv_functions; f++) {
             struct mv_info_mvfn * mvfn = &fn->mv_functions[f];
             unsigned good = 1;
@@ -145,25 +145,30 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
         ret = multiverse_select_mvfn(ctx, fn, best_mvfn);
     } else {
         // A multiversed function pointer
-        // Create an "artificial" mvfn according to the function pointer
-        struct mv_info_mvfn* new_mvfn = (fn->active_mvfn != NULL) ? fn->active_mvfn
-            : multiverse_os_malloc(sizeof(struct mv_info_mvfn));
-        *new_mvfn = (struct mv_info_mvfn) {
-            .function_body = *((void**)fn->function_body),
-            .n_assignments = 0,
-            .assignments = NULL
-        };
-        fn->active_mvfn = NULL;
-        multiverse_arch_decode_mvfn_body(new_mvfn);
-        ret = multiverse_select_mvfn(ctx, fn, new_mvfn);
-        //
-        //
-        // FIXME: This is a memory leak
-        //        active_mvfn is never freed when multiverse_select_mvfn is
-        //        called with mvfn=NULL
-        //        Solution: function pointers should be handled separately
-        //
-        //
+        // Set the "artificial" mvfn according to the function pointer
+
+        void *old_body = (fn->active_mvfn) ? fn->active_mvfn->function_body : NULL;
+        void *new_body = *((void**)fn->function_body);
+
+        if (fn->mv_functions == NULL) {
+            fn->mv_functions = multiverse_os_malloc(sizeof(struct mv_info_mvfn));
+            fn->mv_functions->n_assignments = 0;
+            fn->mv_functions->assignments = NULL;
+        }
+        fn->mv_functions->function_body = new_body;
+
+        // TODO: This is quite hacky and could be done much nicer.
+        //       This would require changing multiverse_select_mvfn to detect
+        //       the mvfn changing also for function_pointers.
+        if (fn->active_mvfn == NULL || old_body != new_body) {
+            // Reset active_mvfn if necessary so that multiverse_select_mvfn does its magic
+            fn->active_mvfn = NULL;
+            // For normal mvfns decoding the body is done in multiverse_init
+            // Function pointers use a single mvfn that is used for the currently
+            // assigned function
+            multiverse_arch_decode_mvfn_body(fn->mv_functions);
+        }
+        ret = multiverse_select_mvfn(ctx, fn, fn->mv_functions);
     }
     return ret;
 }

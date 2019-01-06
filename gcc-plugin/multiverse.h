@@ -91,8 +91,9 @@ struct multiverse_context {
     };
 
     struct func_t : public decl_ref_t {
-        func_t(tree decl) : decl_ref_t(decl) {}
+        func_t(tree decl) : decl_ref_t(decl), function_pointer(false) {}
 
+        bool function_pointer;
         std::list<mvfn_t> mv_functions;
     };
 
