@@ -3,7 +3,6 @@
 #include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
-#include <linux/bootmem.h>
 #include "multiverse.h"
 #include "mv_assert.h"
 #include "platform.h"
@@ -70,11 +69,7 @@ void* multiverse_os_malloc(size_t size) {
     // bootmem allocator in this case.  Note that memory from alloc_bootmem
     // cannot be freed later.  This is currently no problem because Multiverse
     // only needs dynamic memory for initialising persistent data.
-    if (slab_is_available()) {
-        return kmalloc(size, GFP_KERNEL);
-    } else {
-        return alloc_bootmem(size);
-    }
+    return kmalloc(size, GFP_KERNEL);
 }
 
 
