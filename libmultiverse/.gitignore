@@ -1,3 +1,4 @@
 # Additional kernel build artifacts
 .*.o.cmd
 modules.order
+modules.builtin
