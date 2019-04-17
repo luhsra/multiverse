@@ -23,6 +23,10 @@ struct mv_info_fn;
 struct mv_info_callsite;
 struct mv_patchpoint;
 
+struct mv_info_var_inst;
+struct mv_info_fn_inst;
+struct mv_info_callsite_inst;
+
 typedef __UINT_LEAST32_TYPE__ mv_value_t;
 
 
@@ -77,6 +81,12 @@ struct mv_info_fn {
     struct mv_info_mvfn *active_mvfn; // The currently active mvfn
 };
 
+/* Short expansion of the original multiverse struct for better traceability. */
+struct mv_info_fn_inst {
+    struct mv_info_fn_inst *next;
+    struct mv_info_fn **mv_info_fn; /* The original multiverse function information. */
+    const char *instance_name; /* The name of the instance of this multiverse fn struct. Can be the module name for a module for example. */
+};
 
 struct mv_info_fn_ref {
     struct mv_info_fn_ref *next;
@@ -90,6 +100,12 @@ struct mv_info_callsite {
     void *call_label;
 };
 
+/* Short expansion of the original multiverse struct for better traceability. */
+struct mv_info_callsite_inst {
+    struct mv_info_callsite_inst *next;
+    struct mv_info_callsite **mv_info_callsite; /* The original multiverse callsite information. */
+    const char *instance_name; /* The name of the instance of this multiverse callsite struct. Can be the module name of a module for example. */
+};
 
 struct mv_info_var {
     // static
@@ -112,6 +128,12 @@ struct mv_info_var {
     struct mv_info_fn_ref *functions_head; // Functions referening this variable
 };
 
+/* Short expansion of the original multiverse struct for better traceability. */
+struct mv_info_var_inst {
+    struct mv_info_var_inst *next;
+    struct mv_info_var **mv_info_var; /* The original multiverse variable information. */
+    const char *instance_name; /* The name of the instance of this multiverse var struct. Can be the module name for a module for example. */
+};
 
 int multiverse_init(void);
 void multiverse_dump_info(void);
