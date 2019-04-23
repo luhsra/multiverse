@@ -85,6 +85,7 @@ struct mv_info_fn {
 struct mv_info_fn_inst {
     struct mv_info_fn_inst *next;
     struct mv_info_fn **mv_info_fn; /* The original multiverse function information. */
+    size_t mv_info_fn_len; /* The length of the original multiverse fn information list. */
     const char *instance_name; /* The name of the instance of this multiverse fn struct. Can be the module name for a module for example. */
 };
 
@@ -104,6 +105,7 @@ struct mv_info_callsite {
 struct mv_info_callsite_inst {
     struct mv_info_callsite_inst *next;
     struct mv_info_callsite **mv_info_callsite; /* The original multiverse callsite information. */
+    size_t mv_info_callsite_len; /* The length of the original multiverse callsite information list. */
     const char *instance_name; /* The name of the instance of this multiverse callsite struct. Can be the module name of a module for example. */
 };
 
@@ -132,6 +134,7 @@ struct mv_info_var {
 struct mv_info_var_inst {
     struct mv_info_var_inst *next;
     struct mv_info_var **mv_info_var; /* The original multiverse variable information. */
+    size_t mv_info_var_len; /* The length of the original multiverse variable information list. */
     const char *instance_name; /* The name of the instance of this multiverse var struct. Can be the module name for a module for example. */
 };
 
