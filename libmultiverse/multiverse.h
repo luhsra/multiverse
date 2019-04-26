@@ -147,6 +147,11 @@ struct mv_info_gen_xt {
 };
 
 int multiverse_init(void);
+int multiverse_init_module(
+    struct mv_info_var *mod_var_start, struct mv_info_var *mod_var_stop,
+    struct mv_info_fn *mod_fn_start, struct mv_info_fn *mod_fn_stop,
+    struct mv_info_callsite *mod_callsite_start, struct mv_info_callsite *mod_callsite_stop
+);
 void multiverse_dump_info(void);
 
 
