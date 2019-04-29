@@ -152,6 +152,13 @@ int multiverse_init_module(
     struct mv_info_fn *mod_fn_start, struct mv_info_fn *mod_fn_stop,
     struct mv_info_callsite *mod_callsite_start, struct mv_info_callsite *mod_callsite_stop
 );
+
+void multiverse_cleanup_module(
+    struct mv_info_var_xt *mod_var_xt,
+    struct mv_info_fn_xt *mod_fn_xt,
+    struct mv_info_callsite_xt *mod_callsite_xt
+);
+
 void multiverse_dump_info(void);
 
 
