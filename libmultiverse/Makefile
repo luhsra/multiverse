@@ -8,7 +8,7 @@ else
   MULTIVERSE_ARCH = ${ARCH}
 endif
 
-SOURCES := mv_commit.c mv_info.c arch-$(MULTIVERSE_ARCH).c platform-$(PLATFORM).c
+SOURCES := mv_commit.c mv_info.c arch-$(MULTIVERSE_ARCH).c platform-$(PLATFORM).c mv_lists.c mv_module.c
 
 ifeq ($(PLATFORM),linux-kernel)
   obj-y := libmultiverse.o
