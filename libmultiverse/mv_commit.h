@@ -18,5 +18,11 @@ struct mv_patchpoint {
     unsigned char swapspace[6];
 };
 
+/**
+ * This method patches functions which already have been committed before the module was loaded.
+ * If this is the case, then the patch points contain all the data needed for the patching process.
+ */
+int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints);
+
 
 #endif

@@ -85,8 +85,9 @@ struct mv_info_fn {
 struct mv_info_fn_xt {
     struct mv_info_fn_xt *next;
     struct mv_info_fn **mv_info_fn; /* The original multiverse function information. */
-    size_t mv_info_fn_len; /* The length of the original multiverse fn information list. */
+    unsigned int mv_info_fn_len; /* The length of the original multiverse fn information list. */
     const char *xt_name; /* The name of the instance of this multiverse fn struct. Can be the module name for a module for example. */
+    void *mod_addr; /* The address of the module struct in the kernel. */
 };
 
 struct mv_info_fn_ref {
@@ -105,8 +106,9 @@ struct mv_info_callsite {
 struct mv_info_callsite_xt {
     struct mv_info_callsite_xt *next;
     struct mv_info_callsite **mv_info_callsite; /* The original multiverse callsite information. */
-    size_t mv_info_callsite_len; /* The length of the original multiverse callsite information list. */
+    unsigned int mv_info_callsite_len; /* The length of the original multiverse callsite information list. */
     const char *xt_name; /* The name of the instance of this multiverse callsite struct. Can be the module name of a module for example. */
+    void *mod_addr; /* The address of the module struct in the kernel. */
 };
 
 struct mv_info_var {
@@ -118,7 +120,8 @@ struct mv_info_var {
         struct {
             unsigned int
                 variable_width : 4,  // Width of the variable in bytes
-                reserved       : 25, // Currently not used
+                flag_committed : 1,  // Determines if the variable was committed once at any time TODO: Place corresponding information in gcc library
+                reserved       : 24, // Currently not used
                 flag_tracked   : 1,  // Determines if the variable is tracked
                 flag_signed    : 1,  // Determines if the variable is signed
                 flag_bound     : 1;  // 1 if the variable is bound, 0 if not
@@ -134,15 +137,16 @@ struct mv_info_var {
 struct mv_info_var_xt {
     struct mv_info_var_xt *next;
     struct mv_info_var **mv_info_var; /* The original multiverse variable information. */
-    size_t mv_info_var_len; /* The length of the original multiverse variable information list. */
+    unsigned int mv_info_var_len; /* The length of the original multiverse variable information list. */
     const char *xt_name; /* The name of the instance of this multiverse var struct. Can be the module name for a module for example. */
+    void *mod_addr; /* The address of the module struct in the kernel. */
 };
 
 /* Generic version of extension structs for simple non-type related memory operations. */
 struct mv_info_gen_xt {
     struct mv_info_gen_xt *next;
     void **mv_info_entity_list;
-    size_t mv_info_entity_list_len;
+    unsigned int mv_info_entity_list_len;
     const char *xt_name;
 };
 
@@ -153,13 +157,14 @@ int multiverse_init_module(
     struct mv_info_callsite *mod_callsite_start, struct mv_info_callsite *mod_callsite_stop
 );
 
-void multiverse_cleanup_module(
-    struct mv_info_var_xt *mod_var_xt,
-    struct mv_info_fn_xt *mod_fn_xt,
-    struct mv_info_callsite_xt *mod_callsite_xt
-);
-
 void multiverse_dump_info(void);
+
+/* The following global lists remain in the kernel space for it's complete live time. */
+/* They represent each individual module multiverse data. */
+/* The first entry of every list will be filled by the multiverse data of the kernel itself. */
+/*extern struct mv_info_fn_xt *mv_info_fn_xt_list;
+extern struct mv_info_callsite_xt *mv_info_callsite_xt_list;
+extern struct mv_info_var_xt *mv_info_var_xt_list;*/
 
 
 struct mv_info_fn  *  multiverse_info_fn(void * function_body);

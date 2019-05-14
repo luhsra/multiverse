@@ -2,6 +2,7 @@
 #include "mv_string.h"
 #include "multiverse.h"
 #include "mv_commit.h"
+#include "mv_module.h"
 #include "arch.h"
 #include "platform.h"
 
@@ -114,6 +115,36 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
     return 1; // We changed this function
 }
 
+int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints) {
+    struct mv_patchpoint *pp;
+    mv_transaction_ctx_t ctx = mv_transaction_start();
+
+    for (pp = patchpoints; pp != NULL; pp = pp->next) {
+        void *from, *to;
+        unsigned char *location = pp->location;
+
+        /* Only operate on already committed functions. */
+        if(pp->function == NULL || pp->function->active_mvfn == NULL) continue;
+
+        // TODO: arch function is_patchpoint_valid??
+        if (pp->type == PP_TYPE_INVALID) continue;
+        if (!location) continue; // TODO: when does this happen??
+
+        multiverse_arch_patchpoint_size(pp, &from, &to);
+
+        multiverse_transaction_unprotect(&ctx, from);
+        if (from != to) {
+            multiverse_transaction_unprotect(&ctx, to);
+        }
+
+        multiverse_arch_patchpoint_apply(pp->function, pp->function->active_mvfn, pp);
+    }
+
+    mv_transaction_end(&ctx);
+
+    return 1; // We changed this function
+}
+
 static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
     int ret;
     if (fn->n_mv_functions != -1) {
@@ -183,7 +214,7 @@ int multiverse_commit_info_fn(struct mv_info_fn *fn) {
 
 
 int multiverse_commit_fn(void *function_body) {
-    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
     if (!fn) return -1;
 
     return multiverse_commit_info_fn(fn);
@@ -209,7 +240,7 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
 }
 
 int multiverse_commit_refs(void *variable_location) {
-    struct mv_info_var *var = multiverse_info_var(variable_location);
+    struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, variable_location);
     if (!var) return -1;
 
     return multiverse_commit_info_refs(var);
@@ -246,7 +277,7 @@ int multiverse_revert_info_fn(struct mv_info_fn *fn) {
 
 
 int multiverse_revert_fn(void *function_body) {
-    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
     if (!fn) return -1;
 
     return multiverse_revert_info_fn(fn);
@@ -272,7 +303,7 @@ int multiverse_revert_info_refs(struct mv_info_var *var) {
 }
 
 int multiverse_revert_refs(void *variable_location) {
-    struct mv_info_var *var = multiverse_info_var(variable_location);
+    struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, variable_location);
     if (!var) return -1;
     return multiverse_revert_info_refs(var);
 }
@@ -298,12 +329,12 @@ int multiverse_revert() {
 }
 
 int multiverse_is_committed(void *function_body) {
-    struct mv_info_fn *fn = multiverse_info_fn(function_body);
+    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
     return fn->active_mvfn != NULL;
 }
 
 int multiverse_bind(void *var_location, int state) {
-    struct mv_info_var *var = multiverse_info_var(var_location);
+    struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, var_location);
     if (!var) return -1;
 
     if (state >= 0) {
