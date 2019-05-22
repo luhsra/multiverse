@@ -3,6 +3,7 @@
 #include "multiverse.h"
 #include "mv_commit.h"
 #include "mv_module.h"
+#include "mv_lists.h"
 #include "arch.h"
 #include "platform.h"
 
@@ -117,6 +118,9 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
 
 int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints) {
     struct mv_patchpoint *pp;
+
+    multiverse_os_lock();
+
     mv_transaction_ctx_t ctx = mv_transaction_start();
 
     for (pp = patchpoints; pp != NULL; pp = pp->next) {
@@ -142,7 +146,32 @@ int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints) 
 
     mv_transaction_end(&ctx);
 
+    multiverse_os_unlock();
+
     return 1; // We changed this function
+}
+
+void multiverse_mod_commit_functions(struct mv_info_fn_ref *func_ref_list){
+    struct mv_info_fn_ref *iter = func_ref_list;
+
+    for(; iter != NULL; iter = iter->next) {
+        multiverse_commit_info_fn(iter->fn);
+    }
+}
+
+/**
+ * Iterate over all multiverse variables and set their commit flag accordingly.
+ */
+static void __multiverse_set_vars_committed_state(int state) {
+    struct mv_info_var_xt *var_xt_iter = multiverse_get_mod_var_xt_entries();
+
+    for(; var_xt_iter != NULL; var_xt_iter = var_xt_iter->next){
+        unsigned int var_index;
+
+        for(var_index = 0; var_index < var_xt_iter->mv_info_var_len; var_index++){
+            var_xt_iter->mv_info_var[var_index]->flag_committed = state;
+        }
+    }
 }
 
 static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *fn) {
@@ -188,9 +217,9 @@ static int __multiverse_commit_fn(mv_transaction_ctx_t *ctx, struct mv_info_fn *
         }
         fn->mv_functions->function_body = new_body;
 
-        // TODO: This is quite hacky and could be done much nicer.
-        //       This would require changing multiverse_select_mvfn to detect
-        //       the mvfn changing also for function_pointers.
+        // TODO: This is quite hacky and could be done much nicer.                            
+        //       This would require changing multiverse_select_mvfn to detect                            
+        //       the mvfn changing also for function_pointers.                            
         if (fn->active_mvfn == NULL || old_body != new_body) {
             // Reset active_mvfn if necessary so that multiverse_select_mvfn does its magic
             fn->active_mvfn = NULL;
@@ -214,10 +243,17 @@ int multiverse_commit_info_fn(struct mv_info_fn *fn) {
 
 
 int multiverse_commit_fn(void *function_body) {
-    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
-    if (!fn) return -1;
+    int ret;
+    multiverse_os_lock();
 
-    return multiverse_commit_info_fn(fn);
+    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
+    if (!fn) 
+        ret =  -1;
+    else
+        ret = multiverse_commit_info_fn(fn);
+
+    multiverse_os_unlock();
+    return ret;
 }
 
 int multiverse_commit_info_refs(struct mv_info_var *var) {
@@ -236,18 +272,31 @@ int multiverse_commit_info_refs(struct mv_info_var *var) {
 
     mv_transaction_end(&ctx);
 
+    /* Save committed state. */
+    var->flag_committed = 1;
+
     return ret;
 }
 
 int multiverse_commit_refs(void *variable_location) {
-    struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, variable_location);
-    if (!var) return -1;
+    int ret;
+    multiverse_os_lock();
 
-    return multiverse_commit_info_refs(var);
+    struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, variable_location);
+    if (!var) 
+        ret = -1;
+    else
+        ret = multiverse_commit_info_refs(var);
+
+    multiverse_os_unlock();
+    return ret;
 }
 
 int multiverse_commit() {
     int ret = 0;
+
+    multiverse_os_lock();
+
     mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
@@ -259,9 +308,11 @@ int multiverse_commit() {
         }
         ret += r;
     }
-
     mv_transaction_end(&ctx);
 
+    __multiverse_set_vars_committed_state(1);
+
+    multiverse_os_unlock();
     return ret;
 }
 
@@ -277,10 +328,17 @@ int multiverse_revert_info_fn(struct mv_info_fn *fn) {
 
 
 int multiverse_revert_fn(void *function_body) {
-    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
-    if (!fn) return -1;
+    int ret;
+    multiverse_os_lock();
 
-    return multiverse_revert_info_fn(fn);
+    struct mv_info_fn *fn = multiverse_info_fn_find(NULL, NULL, function_body);
+    if (!fn) 
+        ret = -1;
+    else
+        ret = multiverse_revert_info_fn(fn);
+
+    multiverse_os_unlock();
+    return ret;
 }
 
 int multiverse_revert_info_refs(struct mv_info_var *var) {
@@ -299,18 +357,30 @@ int multiverse_revert_info_refs(struct mv_info_var *var) {
 
     mv_transaction_end(&ctx);
 
+    var->flag_committed = 0;
+
     return ret;
 }
 
 int multiverse_revert_refs(void *variable_location) {
+    int ret;
+    multiverse_os_lock();
+
     struct mv_info_var *var = multiverse_info_var_find(NULL, NULL, variable_location);
-    if (!var) return -1;
-    return multiverse_revert_info_refs(var);
+    if (!var) 
+        ret =  -1;
+    else
+        ret = multiverse_revert_info_refs(var);
+
+    multiverse_os_unlock();
+    return ret;
 }
 
 
 int multiverse_revert() {
     int ret = 0;
+    multiverse_os_lock();
+
     mv_transaction_ctx_t ctx = mv_transaction_start();
     struct mv_info_fn *fn;
 
@@ -325,6 +395,9 @@ int multiverse_revert() {
 
     mv_transaction_end(&ctx);
 
+    __multiverse_set_vars_committed_state(0);
+
+    multiverse_os_unlock();
     return ret;
 }
 

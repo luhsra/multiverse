@@ -44,6 +44,12 @@ void* multiverse_os_malloc(size_t size);
 
 void multiverse_os_print(const char* fmt, ...);
 
+void multiverse_os_lock_init(void);
+
+void multiverse_os_lock(void);
+
+void multiverse_os_unlock(void);
+
 #if defined(__cplusplus)
 } // extern "C"
 #endif

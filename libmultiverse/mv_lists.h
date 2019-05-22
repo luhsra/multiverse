@@ -18,6 +18,9 @@ struct mv_info_var_xt* multiverse_get_mod_var_xt_entry(void *mod_addr);
 struct mv_info_fn_xt* multiverse_get_mod_fn_xt_entry(void *mod_addr);
 struct mv_info_callsite_xt* multiverse_get_mod_callsite_xt_entry(void *mod_addr);
 
+/* Get all multiverse data. */
+struct mv_info_var_xt *multiverse_get_mod_var_xt_entries(void);
+
 /* Search for a mv_info_fn by it's body. */
 struct mv_info_fn *multiverse_get_mod_fn_entry(void *function_body);
 

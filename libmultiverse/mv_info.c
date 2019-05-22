@@ -152,6 +152,9 @@ int multiverse_init() {
                                 p, cfn->name, p[0], p[1], p[2], p[3], p[4]);
         }
     }
+
+    multiverse_os_lock_init();
+
     return 0;
 }
 

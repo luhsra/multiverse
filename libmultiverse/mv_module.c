@@ -227,6 +227,9 @@ int multiverse_init_module(
     struct mv_info_callsite *callsite;
     struct mv_patchpoint *module_patchpoints = NULL;
     struct mv_patchpoint *current_module_patchpoint = NULL;
+    /* List of all functions in the module referencing variables which are already commited. */
+    struct mv_info_fn_ref *mod_funcs_ref_comm_vars = NULL;
+    struct mv_info_fn_ref *current_mod_func_ref_comm_var = NULL;
 
     // Step 2: Connect all the moving parts from all compilation units
     //         and fill the runtime data.
@@ -279,6 +282,22 @@ int multiverse_init_module(
                         
                         int ret = mv_info_var_fn_append(fvar, fn);
                         if (ret != 0) return ret;
+
+                        /* If the function references a variable which was already commited save this function to commit it at the end. */
+                        if(fvar->flag_committed){
+                            struct mv_info_fn_ref *save_func_ref = multiverse_os_malloc(sizeof(struct mv_info_fn_ref));
+
+                            save_func_ref->fn = fn;
+                            save_func_ref->next = NULL;
+
+                            if(!mod_funcs_ref_comm_vars){
+                                mod_funcs_ref_comm_vars = save_func_ref;
+                                current_mod_func_ref_comm_var = save_func_ref;    
+                            } else {
+                                current_mod_func_ref_comm_var->next = save_func_ref;
+                                current_mod_func_ref_comm_var = current_mod_func_ref_comm_var->next;
+                            }
+                        }
                     }
                 }
             }
@@ -297,11 +316,12 @@ int multiverse_init_module(
             multiverse_arch_decode_callsite(cfn, callsite->call_label, &pp);
             if (pp.type != PP_TYPE_INVALID) {
                 struct mv_patchpoint *save_pp = multiverse_os_malloc(sizeof(struct mv_patchpoint));
-                *save_pp = pp;
 
                 pp.function = cfn;
                 mv_info_fn_patchpoint_append(cfn, pp);
 
+                *save_pp = pp;
+                save_pp->next = NULL;
                 /* Save patch point. */
                 if(!module_patchpoints) {                    
                     module_patchpoints = save_pp;
@@ -318,6 +338,7 @@ int multiverse_init_module(
         }
     }
 
+    multiverse_mod_commit_functions(mod_funcs_ref_comm_vars);
     multiverse_mod_patch_committed_functions(module_patchpoints);
 
     printk(KERN_INFO "Multiverse module initialized!\n");
@@ -326,9 +347,14 @@ int multiverse_init_module(
 }
 
 void multiverse_cleanup_module(void *mod_addr) {
-    struct mv_info_var_xt *mod_var_xt = multiverse_get_mod_var_xt_entry(mod_addr);
-    struct mv_info_fn_xt *mod_fn_xt = multiverse_get_mod_fn_xt_entry(mod_addr);
-    struct mv_info_callsite_xt *mod_callsite_xt = multiverse_get_mod_callsite_xt_entry(mod_addr);;
+    struct mv_info_var_xt *mod_var_xt;
+    struct mv_info_fn_xt *mod_fn_xt;
+    struct mv_info_callsite_xt *mod_callsite_xt;
+    multiverse_os_lock();
+    
+    mod_var_xt = multiverse_get_mod_var_xt_entry(mod_addr);
+    mod_fn_xt = multiverse_get_mod_fn_xt_entry(mod_addr);
+    mod_callsite_xt = multiverse_get_mod_callsite_xt_entry(mod_addr);;
 
     // Revoke patchpoint-to-fn-append (mv_info_fn_patchpoint_append).
     mv_revoke_mod_fn_patchpoints(mod_callsite_xt);
@@ -340,4 +366,6 @@ void multiverse_cleanup_module(void *mod_addr) {
     multiverse_remove_var_list(mod_var_xt);
     multiverse_remove_fn_list(mod_fn_xt);
     multiverse_remove_callsite_list(mod_callsite_xt);
+
+    multiverse_os_unlock();
 }

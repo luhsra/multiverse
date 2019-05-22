@@ -24,5 +24,14 @@ struct mv_patchpoint {
  */
 int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints);
 
+/**
+ * This method takes a list of function references and commits every function in it.
+ * 
+ * This list is created upon the load of a module.
+ * The module may reference multiversed-variables in its functions which don't belong to the module itself.
+ * If these variables were commited we need to commit the functions defined in the module as well.
+ */
+void multiverse_mod_commit_functions(struct mv_info_fn_ref *func_ref_list);
+
 
 #endif

@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
+#include <linux/mutex.h>
 #include "multiverse.h"
 #include "mv_assert.h"
 #include "platform.h"
@@ -21,6 +22,10 @@ EXPORT_SYMBOL(multiverse_revert_refs);
 EXPORT_SYMBOL(multiverse_revert);
 EXPORT_SYMBOL(multiverse_is_committed);
 EXPORT_SYMBOL(multiverse_bind);
+
+/* Locking. */
+static struct mutex lock;
+static int is_lock_initialized;
 
 
 void *multiverse_os_addr_to_page(void *addr) {
@@ -78,4 +83,19 @@ void multiverse_os_print(const char* fmt, ...) {
     va_start(args, fmt);
     vprintk(fmt, args);
     va_end(args);
+}
+
+void multiverse_os_lock_init(void) {
+    if(!is_lock_initialized){
+        mutex_init(&lock);
+        is_lock_initialized = 1;
+    }
+}
+
+void multiverse_os_lock(void) {
+    if(is_lock_initialized) mutex_lock(&lock);
+}
+
+void multiverse_os_unlock(void) {
+    if(is_lock_initialized) mutex_unlock(&lock);
 }

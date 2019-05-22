@@ -65,9 +65,8 @@ void multiverse_append_var_list(struct mv_info_var *start, struct mv_info_var *s
         for(global_var_list_iter = mv_info_var_xt_list; global_var_list_iter->next != NULL; global_var_list_iter = global_var_list_iter->next);
         global_var_list_iter->next = entry;
     }
-
-    printk(KERN_INFO "Mv var list entry appended.\n");
 }
+
 void multiverse_append_fn_list(struct mv_info_fn *start, struct mv_info_fn *stop, const char *extension_name, void *mod_addr) {
     struct mv_info_fn_xt *entry;
     struct mv_info_fn_xt *global_fn_list_iter;
@@ -116,8 +115,6 @@ void multiverse_append_fn_list(struct mv_info_fn *start, struct mv_info_fn *stop
         for(global_fn_list_iter = mv_info_fn_xt_list; global_fn_list_iter->next != NULL; global_fn_list_iter = global_fn_list_iter->next);
         global_fn_list_iter->next = entry;
     }
-
-    printk(KERN_INFO "Mv fn list entry appended.\n");
 }
 void multiverse_append_callsite_list(struct mv_info_callsite *start, struct mv_info_callsite *stop, const char *extension_name, void *mod_addr) {
     struct mv_info_callsite_xt *entry;
@@ -167,8 +164,6 @@ void multiverse_append_callsite_list(struct mv_info_callsite *start, struct mv_i
         for(global_callsite_list_iter = mv_info_callsite_xt_list; global_callsite_list_iter->next != NULL; global_callsite_list_iter = global_callsite_list_iter->next);
         global_callsite_list_iter->next = entry;
     }
-
-    printk(KERN_INFO "Mv callsite list entry appended.\n");
 }
 
 void multiverse_remove_var_list(struct mv_info_var_xt *entry) {
@@ -197,12 +192,6 @@ struct mv_info_var_xt* multiverse_get_mod_var_xt_entry(void *mod_addr) {
     struct mv_info_var_xt *iter;
 
     for(iter = mv_info_var_xt_list; iter != NULL; iter = iter->next){
-        if(iter->mod_addr){
-            printk(KERN_INFO "Current mod addr: 0x%llx\n", (unsigned long long)iter->mod_addr);
-        }
-        else {
-            printk(KERN_INFO "Current mod addr: NULL\n");
-        }
         if(iter->mod_addr == mod_addr) return iter;
     }
 
@@ -213,12 +202,6 @@ struct mv_info_fn_xt* multiverse_get_mod_fn_xt_entry(void *mod_addr) {
     struct mv_info_fn_xt *iter;
 
     for(iter = mv_info_fn_xt_list; iter != NULL; iter = iter->next){
-        if(iter->mod_addr){
-            printk(KERN_INFO "Current mod addr: 0x%llx\n", (unsigned long long)iter->mod_addr);
-        }
-        else {
-            printk(KERN_INFO "Current mod addr: NULL\n");
-        }
         if(iter->mod_addr == mod_addr) return iter;
     }
 
@@ -229,16 +212,14 @@ struct mv_info_callsite_xt* multiverse_get_mod_callsite_xt_entry(void *mod_addr)
     struct mv_info_callsite_xt *iter;
 
     for(iter = mv_info_callsite_xt_list; iter != NULL; iter = iter->next){
-        if(iter->mod_addr){
-            printk(KERN_INFO "Current mod addr: 0x%llx\n", (unsigned long long)iter->mod_addr);
-        }
-        else {
-            printk(KERN_INFO "Current mod addr: NULL\n");
-        }
         if(iter->mod_addr == mod_addr) return iter;
     }
 
     return NULL;
+}
+
+struct mv_info_var_xt *multiverse_get_mod_var_xt_entries(void) {
+    return mv_info_var_xt_list;
 }
 
 struct mv_info_fn *multiverse_get_mod_fn_entry(void *function_body) {
@@ -291,7 +272,6 @@ void multiverse_remove_generic_extension_entry(struct mv_info_gen_xt **list, str
     /* Clean up. */
     multiverse_free_generic_extension_entry(free_entry);
 
-    printk(KERN_INFO "Entry removed.\n");
 }
 
 void multiverse_free_generic_extension_entry(struct mv_info_gen_xt *entry) {
