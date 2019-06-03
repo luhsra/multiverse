@@ -23,6 +23,8 @@ struct mv_info_var_xt *multiverse_get_mod_var_xt_entries(void);
 
 /* Search for a mv_info_fn by it's body. */
 struct mv_info_fn *multiverse_get_mod_fn_entry(void *function_body);
+/* Search for a multiversed function by it's body. */
+struct mv_info_mvfn *multiverse_get_mod_mvfn_entry(void *function_body);
 
 /* Generic methods to simplify removal process. */
 void multiverse_remove_generic_extension_entry(struct mv_info_gen_xt **list, struct mv_info_gen_xt *entry);

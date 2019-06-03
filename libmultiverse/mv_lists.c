@@ -241,6 +241,33 @@ struct mv_info_fn *multiverse_get_mod_fn_entry(void *function_body) {
     return NULL;
 }
 
+struct mv_info_mvfn *multiverse_get_mod_mvfn_entry(void *function_body) {
+    struct mv_info_fn_xt *iter;
+    
+    if(!function_body) return NULL;
+
+    for(iter = mv_info_fn_xt_list; iter != NULL; iter = iter->next){
+        int i;
+        for(i = 0; i < iter->mv_info_fn_len; i++){
+            struct mv_info_fn *fn_entry = iter->mv_info_fn[i];
+
+            if(fn_entry->mv_functions && fn_entry->n_mv_functions > 0){
+                unsigned int mvfn_index = 0;
+
+                for(; mvfn_index < fn_entry->n_mv_functions; mvfn_index++){
+                    struct mv_info_mvfn mvfn_entry = fn_entry->mv_functions[mvfn_index];
+
+                    if(mvfn_entry.function_body == function_body){
+                        return &(fn_entry->mv_functions[mvfn_index]);
+                    }
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
 void multiverse_remove_generic_extension_entry(struct mv_info_gen_xt **list, struct mv_info_gen_xt *entry) {
     struct mv_info_gen_xt *list_iter;
     struct mv_info_gen_xt *free_entry;
