@@ -119,8 +119,6 @@ multiverse_select_mvfn(mv_transaction_ctx_t *ctx,
 int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints) {
     struct mv_patchpoint *pp;
 
-    multiverse_os_lock();
-
     mv_transaction_ctx_t ctx = mv_transaction_start();
 
     for (pp = patchpoints; pp != NULL; pp = pp->next) {
@@ -145,8 +143,6 @@ int multiverse_mod_patch_committed_functions(struct mv_patchpoint *patchpoints) 
     }
 
     mv_transaction_end(&ctx);
-
-    multiverse_os_unlock();
 
     return 1; // We changed this function
 }

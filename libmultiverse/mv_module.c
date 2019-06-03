@@ -231,6 +231,9 @@ int multiverse_init_module(
     struct mv_info_fn_ref *mod_funcs_ref_comm_vars = NULL;
     struct mv_info_fn_ref *current_mod_func_ref_comm_var = NULL;
 
+    /* Lock to avoid interference with other commits. */
+    multiverse_os_lock();
+
     // Step 2: Connect all the moving parts from all compilation units
     //         and fill the runtime data.
     if(mod_fn_start && mod_fn_stop){
@@ -342,6 +345,8 @@ int multiverse_init_module(
     multiverse_mod_patch_committed_functions(module_patchpoints);
 
     printk(KERN_INFO "Multiverse module initialized!\n");
+
+    multiverse_os_unlock();
 
     return 0;
 }
