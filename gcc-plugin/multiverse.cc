@@ -25,8 +25,8 @@
 #include "gcc-common.h"
 #include "multiverse.h"
 
-#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION >= 9000
-#error "Currently, the plugin supports GCC 6, 7 and 8."
+#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION >= 10000
+#error "Currently, the plugin supports GCC 6, 7, 8 and 9."
 #endif
 
 
@@ -66,6 +66,10 @@ struct plugin_info mv_plugin_info = {
 
 #endif
 
+// GCC 6-7 compatibility, print_generic_stmt
+#if BUILDING_GCC_VERSION < 8000
+const int TDF_NONE = 0;
+#endif
 
 struct multiverse_context mv_ctx;
 
@@ -544,7 +548,7 @@ static unsigned int mv_variant_generation_execute()
 
                 if (dump_file) {
                     debug_printf("found multiverse operand: ");
-                    print_generic_stmt(dump_file, var, 0);
+                    print_generic_stmt(dump_file, var, TDF_NONE);
                 }
 
                 // Insert variable. Initially without hints
@@ -945,7 +949,7 @@ static unsigned int mv_callsites_execute()
                 tree tree_label = create_artificial_label(UNKNOWN_LOCATION);
                 rtx label = jump_target_rtx(tree_label);
                 LABEL_NUSES(label) = 1;
-                emit_label_before(label, insn);
+                emit_label_before(static_cast<rtx_code_label*>(label), insn);
 
                 // Since jump_target_rtx emits a code_label, which is
                 // not allowed within a basic block, we transform it
