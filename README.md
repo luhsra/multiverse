@@ -123,7 +123,7 @@ int main()
 ## What Can Be Multiversed?
 * __Variables__
   * __Enumeral Types__: For every value of the enum, we generate one multiverse variant.
-  * __Integer Types__: Integer types are a bit more complex, since their domain is much larger in general ([0, INT_MAX]). Therefore, we guess useful assignments from referencing function bodies. If we find no comparision with a constant (config_A == 3), we fall back to specializing it to `0` and `1`
+  * __Integer Types__: Integer types are a bit more complex, since their domain is much larger in general ([0, INT_MAX]). Therefore, we guess useful assignments from referencing function bodies. If we find no comparison with a constant (config_A == 3), we fall back to specializing it to `0` and `1`
 * __Functions__
   * In general, all functions can be attributed with multiverse. Nevertheless, multiverse functions are not inlined anymore.
 * __Function Pointers__
