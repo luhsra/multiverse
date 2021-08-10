@@ -25,8 +25,8 @@
 #include "gcc-common.h"
 #include "multiverse.h"
 
-#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION >= 10000
-#error "Currently, the plugin supports GCC 6, 7, 8 and 9."
+#if BUILDING_GCC_VERSION < 6000 || BUILDING_GCC_VERSION >= 12000
+#error "Currently, the plugin supports GCC 6, 7, 8, 9, 10 and 11."
 #endif
 
 
@@ -298,8 +298,13 @@ static tree clone_fndecl(tree fndecl, std::string fname)
     clone->force_output = 1;
 
     if (gimple_has_body_p(fndecl)) {
+#if BUILDING_GCC_MAJOR < 10
         tree_function_versioning(fndecl, new_decl, NULL, NULL,
                                  NULL, false, NULL, NULL);
+#else
+        tree_function_versioning(fndecl, new_decl, NULL, NULL,
+                                 false, bitmap(), NULL);
+#endif
         clone->lowered = true;
     }
 
@@ -815,7 +820,12 @@ static unsigned int mv_variant_elimination_execute()
 #else
             sem_function *func = new sem_function(node, 0, &bmstack);
 #endif
+#if BUILDING_GCC_MAJOR >= 10
+            ipa_icf_gimple::func_checker fc;
+            func->init(&fc);
+#else
             func->init();
+#endif
 
             debug_printf("%s ", mvfn_info.name());
 
