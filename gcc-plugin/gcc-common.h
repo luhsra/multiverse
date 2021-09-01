@@ -104,13 +104,14 @@
 #include "tree-cfg.h"
 
 /* Multiverse customization */
+#include <list>
 #if BUILDING_GCC_VERSION >= 10000
+#include <tree-ssa-alias-compare.h>
+#endif
 #include <alloc-pool.h>
 #include <fibonacci_heap.h>
-#include <tree-ssa-alias-compare.h>
 #include <ipa-icf-gimple.h>
 #include <ipa-icf.h>
-#endif
 
 #include "gimple-iterator.h"
 #include "gimple-ssa.h"
